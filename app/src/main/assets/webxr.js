@@ -108,10 +108,19 @@ window.leiaManager = (function() {
     let canvas = null;
 
     let oldCanvasParent = null;
+    let oldCanvasWidth = null;
+    let oldCanvasHeight = null;
+    let oldCanvasStyle = null;
     function appendCanvasToBackdrop() {
         if (!canvas) return;
         oldCanvasParent = canvas.parentElement;
+        oldCanvasStyle = canvas.style;
+        oldCanvasWidth = canvas.width;
+        oldCanvasHeight = canvas.height;
         fullscreenBackdrop.appendChild(canvas);
+        canvas.style = 'width: 100%; height: 100%;'
+        canvas.width = canvas.clientWidth * window.devicePixelRatio;
+        canvas.height = canvas.clientHeight * window.devicePixelRatio;
     }
     function removeCanvasFromBackdrop() {
         if (!canvas) return;
@@ -120,6 +129,9 @@ window.leiaManager = (function() {
         } else {
             fullscreenBackdrop.removeChild(canvas);
         }
+        canvas.style = oldCanvasStyle;
+        canvas.width = oldCanvasWidth;
+        canvas.height = oldCanvasHeight;
     }
 
     function activate(session) {
