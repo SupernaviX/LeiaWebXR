@@ -172,23 +172,18 @@ window.leiaManager = (function() {
 })();
 
 class XRWebGLLayer {
-    #framebuffer;
-    #viewports = [];
+    #device;
     constructor(session, context) {
         this.session = session;
+        this.#device = session._device;
         this.context = context;
         this._compositionEnabled = session._mode !== 'inline';
-        this.#framebuffer = null; // TODO: for non-inline displays this should be non-null
     }
 
-    get framebuffer() { return this.#framebuffer; }
-
-    _setViewports(viewports) {
-        this.#viewports = viewports;
-    }
+    get framebuffer() { return this.#device.framebuffer; }
 
     getViewport(view) {
-        return view._findViewport(this.#viewports);
+        return this.#device.getViewport(view);
     }
 }
 Object.setPrototypeOf(XRWebGLLayer.prototype, XRLayer.prototype);
@@ -375,6 +370,7 @@ class XRFrame {
 
 class XRDevice {
     #viewSpaces;
+    #viewports;
     #oldState;
     #oldWidth;
     #oldHeight;
@@ -387,27 +383,46 @@ class XRDevice {
         return this.#viewSpaces;
     }
 
+    get framebuffer() {
+        return null;
+    }
+
+    getViewport(view) {
+        return view._findViewport(this.#viewports);
+    }
+
     onSessionStart() {}
     onSessionEnd() {}
 
     updateDisplay(renderState) {
-        const { baseLayer } = renderState;
-        const { width = 0, height = 0 } = renderState._canvas || {};
-        if (this.#oldState === renderState && this.#oldWidth === width && this.#oldHeight === height) {
-            return;
+        const { baseLayer, _context: context } = renderState;
+        const { width = 0, height = 0 } = context?.canvas ?? {};
+        const contextChanged = this.#oldState !== renderState;
+        const sizeChanged = this.#oldWidth !== width || this.#oldHeight !== height;
+        if (contextChanged) {
+            this.#oldState = renderState;
+            this._onContextChanged(context);
         }
-        this.#oldState = renderState;
-        this.#oldWidth = width;
-        this.#oldHeight = height;
-        this._updateViewSpaces(renderState, width, height);
-        if (baseLayer) {
-            const viewports = this._computeViewports(width, height);
-            baseLayer._setViewports(viewports);
+        if (contextChanged || sizeChanged) {
+            this.#oldWidth = width;
+            this.#oldHeight = height;
+            this._updateViewSpaces(renderState, width, height)
+            this.#viewports = this._computeViewports(width, height);
         }
     }
 
+    draw() {
+        const context = this.#oldState?._context;
+        if (context != null) {
+            const { width, height } = context.canvas;
+            this._draw(context, width, height);
+        }
+    }
+
+    _onContextChanged(context) {}
     _updateViewSpaces(renderState, width, height) {}
     _computeViewports(width, height) {}
+    _draw(context, width, height) {}
 }
 class InlineXRDevice extends XRDevice {
     #projectionMatrix;
@@ -441,7 +456,35 @@ class InlineXRDevice extends XRDevice {
         ];
     }
 }
+
+const VERTEX_SHADER =`
+attribute vec4 a_Pos;
+varying vec2 v_TexCoord;
+void main() {
+    gl_Position = a_Pos;
+    v_TexCoord = a_Pos.xy * .5 + .5;
+}`;
+
+const FRAGMENT_SHADER =`
+precision mediump float;
+varying vec2 v_TexCoord;
+uniform sampler2D u_Texture;
+void main() {
+    gl_FragColor = texture2D(u_Texture, v_TexCoord);
+}`;
+
 class LeiaXRDevice extends InlineXRDevice { // TODO: just extend the base
+    #framebuffer = null;
+    #texture = null;
+    #positionBuffer = null;
+    #texCoordBuffer = null;
+    #indexBuffer = null;
+    #program = null;
+
+    #positionLocation = null;
+    #texCoordLocation = null;
+    #textureLocation = null;
+
     onSessionStart(session) {
         leiaManager.activate(session);
     }
@@ -450,11 +493,91 @@ class LeiaXRDevice extends InlineXRDevice { // TODO: just extend the base
         leiaManager.deactivate();
     }
 
-    updateDisplay(renderState) {
-        if (renderState._canvas != null) {
-            leiaManager.attachCanvas(renderState._canvas);
+    get framebuffer() {
+        return this.#framebuffer;
+    }
+
+    _onContextChanged(context) {
+        if (!context) return;
+
+        leiaManager.attachCanvas(context.canvas);
+        const { width, height } = context.canvas;
+        this.#initFramebuffer(context, width, height);
+    }
+
+    #initFramebuffer(gl, width, height) {
+        this.#texture = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, this.#texture);
+
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, width, height, 0, gl.RGB, gl.UNSIGNED_BYTE, null);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+        this.#framebuffer = gl.createFramebuffer();
+        gl.bindFramebuffer(gl.FRAMEBUFFER, this.#framebuffer);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.#texture, 0);
+
+        this.#positionBuffer = gl.createBuffer();
+        this.#texCoordBuffer = gl.createBuffer();
+        this.#indexBuffer = gl.createBuffer();
+
+        const vertexShader = gl.createShader(gl.VERTEX_SHADER);
+        gl.shaderSource(vertexShader, VERTEX_SHADER);
+        gl.compileShader(vertexShader);
+        if (!gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS)) {
+            const info = gl.getShaderInfoLog(vertexShader);
+            console.error(`Could not compile vertex shader\n\n${info}`);
         }
-        super.updateDisplay(renderState);
+        const fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
+        gl.shaderSource(fragmentShader, FRAGMENT_SHADER);
+        gl.compileShader(fragmentShader);
+        if (!gl.getShaderParameter(fragmentShader, gl.COMPILE_STATUS)) {
+            const info = gl.getShaderInfoLog(fragmentShader);
+            console.error(`Could not compile fragment shader\n\n${info}`);
+        }
+        this.#program = gl.createProgram();
+        gl.attachShader(this.#program, vertexShader);
+        gl.attachShader(this.#program, fragmentShader);
+        gl.linkProgram(this.#program);
+
+        if (!gl.getProgramParameter(this.#program, gl.LINK_STATUS)) {
+            const info = gl.getProgramInfoLog(this.#program);
+            console.error(`Could not link program\n\n${info}`);
+        }
+
+        gl.deleteShader(vertexShader);
+        gl.deleteShader(fragmentShader);
+
+        this.#positionLocation = gl.getAttribLocation(this.#program, "a_Pos");
+        this.#textureLocation = gl.getUniformLocation(this.#program, "u_Texture");
+    }
+
+    _draw(gl, width, height) {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        gl.viewport(0, 0, width, height);
+        const positionVertices = new Float32Array([
+            -1, -1,
+            1, -1,
+            -1, 1,
+            -1, 1,
+            1, -1,
+            1, 1,
+        ]);
+        gl.useProgram(this.#program);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.#positionBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, positionVertices, gl.STATIC_DRAW);
+        gl.enableVertexAttribArray(this.#positionLocation);
+        gl.vertexAttribPointer(this.#positionLocation, 2, gl.FLOAT, false, 0, 0);
+
+        gl.uniform1i(this.#textureLocation, 0);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, this.#texture);
+
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
     }
 }
 
@@ -476,20 +599,20 @@ class XRSession extends EventTarget {
     #animationFrameCallbackIdentifier = 0;
     #windowRafHandle;
     #viewerReferenceSpace;
-    #device;
+    _device;
 
     constructor(mode, device) {
         super();
         this._mode = mode;
-        this.#device = device;
-        this.#animationFrame = new XRFrame(this, this.#device, true);
+        this._device = device;
+        this.#animationFrame = new XRFrame(this, device, true);
         this.#activeRenderState = Object.freeze({
             depthNear: 0.1,
             depthFar: 1000.0,
             inlineVerticalFieldOfView: mode === 'inline' ? Math.PI * 0.5 : null,
             baseLayer: null,
             _compositionEnabled: true,
-            _canvas: null,
+            _context: null,
         });
         this.#viewerReferenceSpace = new XRReferenceSpace("viewer", IDENTITY_MATRIX);
         this.#windowRafHandle = window.requestAnimationFrame(timestamp => this.#onWindowAnimationFrame(timestamp));
@@ -524,18 +647,18 @@ class XRSession extends EventTarget {
             throw new TypeError("Don't support that layer stuff yet");
         }
         let compositionEnabled = true;
-        let canvas = null;
+        let context = null;
         if (state.baseLayer) {
             if (this._mode === 'inline' && state.baseLayer._compositionEnabled === false) {
                 compositionEnabled = false;
             }
-            canvas = state.baseLayer.context.canvas;
+            context = state.baseLayer.context;
         }
         this.#pendingRenderState = Object.freeze({
             ...this.#activeRenderState,
             ...state,
             _compositionEnabled: compositionEnabled,
-            _canvas: canvas,
+            _context: context,
         });
     }
 
@@ -570,10 +693,13 @@ class XRSession extends EventTarget {
     }
 
     #onWindowAnimationFrame(timestamp) {
+        if (this.#ended) {
+            return;
+        }
         const frame = this.#animationFrame;
         frame._setTimes(timestamp, timestamp);
         if (this.#shouldRenderFrame()) {
-            this.#device.updateDisplay(this.#activeRenderState);
+            this._device.updateDisplay(this.#activeRenderState);
 
             this.#runningAnimationFrameCallbacks = this.#animationFrameCallbacks;
             this.#animationFrameCallbacks = [];
@@ -587,6 +713,7 @@ class XRSession extends EventTarget {
                 }
             });
             this.#runningAnimationFrameCallbacks = [];
+            this._device.draw();
         }
         if (this.#pendingRenderState) {
             this.#applyPendingRenderState();
@@ -596,7 +723,7 @@ class XRSession extends EventTarget {
 
     #shouldRenderFrame() {
         const activeState = this.#activeRenderState;
-        if (activeState.baseLayer == null || activeState._canvas === null) {
+        if (activeState.baseLayer == null || activeState._context === null) {
             return false;
         }
         return true;
@@ -608,7 +735,7 @@ class XRSession extends EventTarget {
         this.#pendingRenderState = null;
         requestAnimationFrame(() => {
             this.#activeRenderState = newState;
-            this.#device.updateDisplay(newState)
+            this._device.updateDisplay(newState);
         });
     }
 }
