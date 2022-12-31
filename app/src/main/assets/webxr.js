@@ -100,6 +100,65 @@ function getOrientation(matrix) {
     });
 }
 
+window.leiaManager = (function() {
+    const fullscreenBackdrop = document.createElement('div');
+    fullscreenBackdrop.style = 'background: white; position: fixed; top: 0; bottom: 0; left: 0; right: 0; z-index: 99999;'
+
+    let active = false;
+    let canvas = null;
+
+    let oldCanvasParent = null;
+    function appendCanvasToBackdrop() {
+        if (!canvas) return;
+        oldCanvasParent = canvas.parentElement;
+        fullscreenBackdrop.appendChild(canvas);
+    }
+    function removeCanvasFromBackdrop() {
+        if (!canvas) return;
+        if (oldCanvasParent) {
+            oldCanvasParent.appendChild(canvas);
+        } else {
+            fullscreenBackdrop.removeChild(canvas);
+        }
+    }
+
+    function activate(session) {
+        if (active) return;
+        active = true;
+
+        history.pushState({ leiaXrEnabled: true }, '');
+        const onFullscreenExited = (event) => {
+            event.preventDefault();
+            window.removeEventListener('popstate', onFullscreenExited);
+            navigator.xr._shutdownSession(session);
+            deactivate();
+        }
+        window.addEventListener('popstate', onFullscreenExited);
+
+        document.body.appendChild(fullscreenBackdrop);
+        appendCanvasToBackdrop();
+    }
+
+    function attachCanvas(_canvas) {
+        if (canvas !== _canvas) {
+            canvas = _canvas;
+            appendCanvasToBackdrop();
+        }
+    }
+    function deactivate() {
+        if (!active) return;
+        active = false;
+        document.body.removeChild(fullscreenBackdrop)
+        removeCanvasFromBackdrop();
+    }
+
+    return {
+        activate,
+        attachCanvas,
+        deactivate
+    };
+})();
+
 class XRWebGLLayer {
     #framebuffer;
     #viewports = [];
@@ -107,7 +166,7 @@ class XRWebGLLayer {
         this.session = session;
         this.context = context;
         this._compositionEnabled = session._mode !== 'inline';
-        this.#framebuffer = this._compositionEnabled ? context.createFramebuffer() : null;
+        this.#framebuffer = null; // TODO: for non-inline displays this should be non-null
     }
 
     get framebuffer() { return this.#framebuffer; }
@@ -251,8 +310,9 @@ class XRSpace extends EventTarget {
     }
 }
 class XRViewSpace extends XRSpace {
-    constructor(originOffset) {
+    constructor(projectionMatrix, originOffset) {
         super(originOffset);
+        this.projectionMatrix = projectionMatrix;
     }
 }
 class XRReferenceSpace extends XRSpace {
@@ -269,12 +329,14 @@ class XRReferenceSpace extends XRSpace {
 
 class XRFrame {
     #session;
+    #device;
     #animationFrame;
     #time;
     #predictedDisplayTime;
 
-    constructor(session, animationFrame) {
+    constructor(session, device, animationFrame) {
         this.#session = session;
+        this.#device = device;
         this.#animationFrame = animationFrame;
     }
 
@@ -291,15 +353,107 @@ class XRFrame {
         const transform = XRRigidTransform._fromMatrix(refSpaceMatrix);
 
         const invertedRefSpaceMatrix = invert(refSpaceMatrix);
-        const session = this.#session;
-        const views = session._viewSpaces.map(viewSpace => {
+        const views = this.#device.viewSpaces.map(viewSpace => {
             const relativeMatrix = multiply(invertedRefSpaceMatrix, viewSpace._originOffset);
-            return new XRView(viewSpace, session._projectionMatrix, XRRigidTransform._fromMatrix(relativeMatrix));
+            return new XRView(viewSpace, viewSpace.projectionMatrix, XRRigidTransform._fromMatrix(relativeMatrix));
         });
         return new XRViewerPose(transform, views);
     }
 }
 
+class XRDevice {
+    #viewSpaces;
+    #oldState;
+    #oldWidth;
+    #oldHeight;
+
+    constructor(viewSpaces) {
+        this.#viewSpaces = viewSpaces;
+    }
+
+    get viewSpaces() {
+        return this.#viewSpaces;
+    }
+
+    onSessionStart() {}
+    onSessionEnd() {}
+
+    updateDisplay(renderState) {
+        const { baseLayer } = renderState;
+        const { width = 0, height = 0 } = renderState._canvas || {};
+        if (this.#oldState === renderState && this.#oldWidth === width && this.#oldHeight === height) {
+            return;
+        }
+        this.#oldState = renderState;
+        this.#oldWidth = width;
+        this.#oldHeight = height;
+        this._updateViewSpaces(renderState, width, height);
+        if (baseLayer) {
+            const viewports = this._computeViewports(width, height);
+            baseLayer._setViewports(viewports);
+        }
+    }
+
+    _updateViewSpaces(renderState, width, height) {}
+    _computeViewports(width, height) {}
+}
+class InlineXRDevice extends XRDevice {
+    #projectionMatrix;
+    #viewSpace;
+
+    constructor() {
+        const projectionMatrix = new Float32Array(16);
+        const viewSpace = new XRViewSpace(projectionMatrix, IDENTITY_MATRIX);
+        super([viewSpace]);
+        this.#projectionMatrix = projectionMatrix;
+        this.#viewSpace = viewSpace;
+    }
+
+    _updateViewSpaces(renderState, width, height) {
+        const { depthNear, depthFar, inlineVerticalFieldOfView } = renderState;
+        const fov = inlineVerticalFieldOfView || (Math.PI / 2); // TODO: shouldn't need this
+        const target = this.#projectionMatrix;
+
+        const aspectRatio = width / height;
+        const s = 1 / Math.tan(fov / 2);
+        target[0] = s / aspectRatio;
+        target[5] = s;
+        target[10] = -(depthFar + depthNear) / (depthFar - depthNear);
+        target[11] = -1;
+        target[14] = -2 * depthFar * depthNear / (depthFar - depthNear);
+    }
+
+    _computeViewports(width, height) {
+        return [
+            { viewSpace: this.#viewSpace, viewport: new XRViewport(0, 0, width, height), }
+        ];
+    }
+}
+class LeiaXRDevice extends InlineXRDevice { // TODO: just extend the base
+    onSessionStart(session) {
+        leiaManager.activate(session);
+    }
+
+    onSessionEnd() {
+        leiaManager.deactivate();
+    }
+
+    updateDisplay(renderState) {
+        if (renderState._canvas != null) {
+            leiaManager.attachCanvas(renderState._canvas);
+        }
+        super.updateDisplay(renderState);
+    }
+}
+
+class XRSessionEvent extends Event {
+    #session;
+    constructor(type, { session }) {
+        super(type);
+        this.#session = session;
+    }
+    get session() { return this.#session; }
+}
 class XRSession extends EventTarget {
     #animationFrame;
     #ended = false;
@@ -310,25 +464,34 @@ class XRSession extends EventTarget {
     #animationFrameCallbackIdentifier = 0;
     #windowRafHandle;
     #viewerReferenceSpace;
-    _projectionMatrix = new Float32Array(16);
+    #device;
 
-    constructor(mode) {
+    constructor(mode, device) {
         super();
         this._mode = mode;
-        this._viewSpaces = [
-            new XRViewSpace(IDENTITY_MATRIX),
-        ]
-        this.#animationFrame = new XRFrame(this, true);
+        this.#device = device;
+        this.#animationFrame = new XRFrame(this, this.#device, true);
         this.#activeRenderState = Object.freeze({
             depthNear: 0.1,
             depthFar: 1000.0,
             inlineVerticalFieldOfView: mode === 'inline' ? Math.PI * 0.5 : null,
             baseLayer: null,
-            _compositionEnabled: false,
+            _compositionEnabled: true,
             _canvas: null,
         });
         this.#viewerReferenceSpace = new XRReferenceSpace("viewer", IDENTITY_MATRIX);
         this.#windowRafHandle = window.requestAnimationFrame(timestamp => this.#onWindowAnimationFrame(timestamp));
+    }
+
+    async end() {
+        if (this.#ended) {
+            throw new Error('its already shut down');
+        }
+        this._shutdown();
+    }
+    _shutdown() {
+        this.#ended = true;
+        this.dispatchEvent(new XRSessionEvent('end', { session: this }));
     }
 
     get renderState() { return this.#activeRenderState; }
@@ -348,27 +511,26 @@ class XRSession extends EventTarget {
         if (state.layers != null) {
             throw new TypeError("Don't support that layer stuff yet");
         }
-        if (this._mode !== 'inline' && state.baseLayer) {
-            state.baseLayer.context.canvas.requestFullscreen().then(console.log, console.error);
+        let compositionEnabled = true;
+        let canvas = null;
+        if (state.baseLayer) {
+            if (this._mode === 'inline' && state.baseLayer._compositionEnabled === false) {
+                compositionEnabled = false;
+            }
+            canvas = state.baseLayer.context.canvas;
         }
-        const compositionDisabled = this._mode === 'inline' && state.baseLayer && state.baseLayer._compositionEnabled === false
         this.#pendingRenderState = Object.freeze({
             ...this.#activeRenderState,
             ...state,
-            ...(compositionDisabled ? {
-                _compositionEnabled: false,
-                _canvas: state.baseLayer.context.canvas,
-            } : {
-                _compositionEnabled: true,
-                _canvas: null,
-            })
+            _compositionEnabled: compositionEnabled,
+            _canvas: canvas,
         });
     }
 
     async requestReferenceSpace(type) {
-        if (type === 'viewer') {
+        //if (type === 'viewer') {
             return this.#viewerReferenceSpace;
-        }
+        //}
         throw new TypeError("Only support viewer");
     }
 
@@ -399,9 +561,7 @@ class XRSession extends EventTarget {
         const frame = this.#animationFrame;
         frame._setTimes(timestamp, timestamp);
         if (this.#shouldRenderFrame()) {
-            if (this._mode === 'inline') {
-                this.#computeInlineProjectionMatrix();
-            }
+            this.#device.updateDisplay(this.#activeRenderState);
 
             this.#runningAnimationFrameCallbacks = this.#animationFrameCallbacks;
             this.#animationFrameCallbacks = [];
@@ -424,26 +584,10 @@ class XRSession extends EventTarget {
 
     #shouldRenderFrame() {
         const activeState = this.#activeRenderState;
-        if (activeState.baseLayer == null) {
-            return false;
-        }
-        if (this._mode === 'inline' && activeState._canvas === null) {
+        if (activeState.baseLayer == null || activeState._canvas === null) {
             return false;
         }
         return true;
-    }
-
-    #computeInlineProjectionMatrix() {
-        const { depthNear, depthFar, inlineVerticalFieldOfView, _canvas: { width, height } } = this.#activeRenderState;
-        const target = this._projectionMatrix;
-
-        const aspectRatio = width / height;
-        const s = 1 / Math.tan(inlineVerticalFieldOfView / 2);
-        target[0] = s / aspectRatio;
-        target[5] = s;
-        target[10] = -(depthFar + depthNear) / (depthFar - depthNear);
-        target[11] = -1;
-        target[14] = -2 * depthFar * depthNear / (depthFar - depthNear);
     }
 
     #applyPendingRenderState() {
@@ -452,28 +596,35 @@ class XRSession extends EventTarget {
         this.#pendingRenderState = null;
         requestAnimationFrame(() => {
             this.#activeRenderState = newState;
-            if (activeState.baseLayer !== newState.baseLayer && newState._canvas) {
-                this.#updateViewports(newState);
-            }
+            this.#device.updateDisplay(newState)
         });
     }
-
-    #updateViewports(renderState) {
-        const { _canvas: { width, height } } = renderState;
-        const viewports = this._viewSpaces.map(viewSpace => ({
-            viewSpace,
-            viewport: new XRViewport(0, 0, width, height),
-        }));
-        renderState.baseLayer._setViewports(viewports);
-    }
 }
 
-navigator.xr = {
-    isSessionSupported: async (mode) => mode === 'inline',
-    requestSession: async (mode) => {
-        if (mode !== 'inline') {
-            throw new Error('That mode not supported');
+class XRSystem extends EventTarget {
+    #immersiveSession = null;
+    async isSessionSupported(mode) {
+        return true;
+    }
+    async requestSession(mode) {
+        const isInline = mode === 'inline';
+        if (!isInline && this.#immersiveSession) {
+            throw new Error('you already have one running');
         }
-        return new XRSession(mode);
+
+        const device = isInline ? new InlineXRDevice() : new LeiaXRDevice();
+        const session = new XRSession(mode, device);
+        if (!isInline) {
+            this.#immersiveSession = session;
+        }
+        device.onSessionStart(session);
+        return session;
+    }
+    _shutdownSession(session) {
+        if (this.#immersiveSession === session) {
+            this.#immersiveSession = null;
+        }
+        session._shutdown();
     }
 }
+navigator.xr = new XRSystem();

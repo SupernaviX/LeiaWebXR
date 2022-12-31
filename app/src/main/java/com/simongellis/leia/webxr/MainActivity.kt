@@ -28,4 +28,13 @@ class MainActivity : AppCompatActivity() {
 
         webView.loadUrl("https://immersive-web.github.io/webxr-samples/immersive-ar-session.html?usePolyfill=0")
     }
+
+    override fun onBackPressed() {
+        val webView = findViewById<WebView>(R.id.webview)
+        if (webView.canGoBack()) {
+            webView.goBack()
+        } else {
+            super.onBackPressed()
+        }
+    }
 }
