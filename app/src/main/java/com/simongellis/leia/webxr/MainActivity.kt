@@ -26,7 +26,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        webView.loadUrl("https://immersive-web.github.io/webxr-samples/immersive-ar-session.html?usePolyfill=0")
+        webView.loadUrl("https://immersive-web.github.io/webxr-samples/immersive-vr-session.html?usePolyfill=0")
     }
 
     override fun onBackPressed() {
