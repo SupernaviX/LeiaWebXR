@@ -142,10 +142,12 @@ window.leiaManager = (function() {
         if (active) return;
         active = true;
 
+        Leia.requestBacklightMode3D();
         history.pushState({ leiaXrEnabled: true }, '');
         const onFullscreenExited = (event) => {
             event.preventDefault();
             window.removeEventListener('popstate', onFullscreenExited);
+            Leia.requestBacklightMode2D();
             navigator.xr._shutdownSession(session);
             deactivate();
         }
