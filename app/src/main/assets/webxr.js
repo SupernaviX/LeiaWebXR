@@ -27,25 +27,25 @@ function multiply(m1, m2) {
 function invert(m) {
     const r = new Float32Array([
         m[5]*m[10]*m[15] - m[5]*m[11]*m[14] - m[9]*m[6]*m[15] + m[9]*m[7]*m[14] + m[13]*m[6]*m[11] - m[13]*m[7]*m[10],
-        -m[4]*m[10]*m[15] + m[4]*m[11]*m[14] + m[8]*m[6]*m[15] - m[8]*m[7]*m[14] - m[12]*m[6]*m[11] + m[12]*m[7]*m[10],
-        m[4]*m[9]*m[15] - m[4]*m[11]*m[13] - m[8]*m[5]*m[15] + m[8]*m[7]*m[13] + m[12]*m[5]*m[11] - m[12]*m[7]*m[9],
-        -m[4]*m[9]*m[14] + m[4]*m[10]*m[13] + m[8]*m[5]*m[14] - m[8]*m[6]*m[13] - m[12]*m[5]*m[10] + m[12]*m[6]*m[9],
-
         -m[1]*m[10]*m[15] + m[1]*m[11]*m[14] + m[9]*m[2]*m[15] - m[9]*m[3]*m[14] - m[13]*m[2]*m[11] + m[13]*m[3]*m[10],
-        m[0]*m[10]*m[15] - m[0]*m[11]*m[14] - m[8]*m[2]*m[15] + m[8]*m[3]*m[14] + m[12]*m[2]*m[11] - m[12]*m[3]*m[10],
-        -m[0]*m[9]*m[15] + m[0]*m[11]*m[13] + m[8]*m[1]*m[15] - m[8]*m[3]*m[13] - m[12]*m[1]*m[11] + m[12]*m[3]*m[9],
-        m[0]*m[9]*m[14] - m[0]*m[10]*m[13] - m[8]*m[1]*m[14] + m[8]*m[2]*m[13] + m[12]*m[1]*m[10] - m[12]*m[2]*m[9],
-
         m[1]*m[6]*m[15] - m[1]*m[7]*m[14] - m[5]*m[2]*m[15] + m[5]*m[3]*m[14] + m[13]*m[2]*m[7] - m[13]*m[3]*m[6],
-        -m[0]*m[6]*m[15] + m[0]*m[7]*m[14] + m[4]*m[2]*m[15] - m[4]*m[3]*m[14] - m[12]*m[2]*m[7] + m[12]*m[3]*m[6],
-        m[0]*m[5]*m[15] - m[0]*m[7]*m[13] - m[4]*m[1]*m[15] + m[4]*m[3]*m[13] + m[12]*m[1]*m[7] - m[12]*m[3]*m[5],
-        -m[0]*m[5]*m[14] + m[0]*m[6]*m[13] + m[4]*m[1]*m[14] - m[4]*m[2]*m[13] - m[12]*m[1]*m[6] + m[12]*m[2]*m[5],
-
         -m[1]*m[6]*m[11] + m[1]*m[7]*m[10] + m[5]*m[2]*m[11] - m[5]*m[3]*m[10] - m[9]*m[2]*m[7] + m[9]*m[3]*m[6],
+
+        -m[4]*m[10]*m[15] + m[4]*m[11]*m[14] + m[8]*m[6]*m[15] - m[8]*m[7]*m[14] - m[12]*m[6]*m[11] + m[12]*m[7]*m[10],
+        m[0]*m[10]*m[15] - m[0]*m[11]*m[14] - m[8]*m[2]*m[15] + m[8]*m[3]*m[14] + m[12]*m[2]*m[11] - m[12]*m[3]*m[10],
+        -m[0]*m[6]*m[15] + m[0]*m[7]*m[14] + m[4]*m[2]*m[15] - m[4]*m[3]*m[14] - m[12]*m[2]*m[7] + m[12]*m[3]*m[6],
         m[0]*m[6]*m[11] - m[0]*m[7]*m[10] - m[4]*m[2]*m[11] + m[4]*m[3]*m[10] + m[8]*m[2]*m[7] - m[8]*m[3]*m[6],
+
+        m[4]*m[9]*m[15] - m[4]*m[11]*m[13] - m[8]*m[5]*m[15] + m[8]*m[7]*m[13] + m[12]*m[5]*m[11] - m[12]*m[7]*m[9],
+        -m[0]*m[9]*m[15] + m[0]*m[11]*m[13] + m[8]*m[1]*m[15] - m[8]*m[3]*m[13] - m[12]*m[1]*m[11] + m[12]*m[3]*m[9],
+        m[0]*m[5]*m[15] - m[0]*m[7]*m[13] - m[4]*m[1]*m[15] + m[4]*m[3]*m[13] + m[12]*m[1]*m[7] - m[12]*m[3]*m[5],
         -m[0]*m[5]*m[11] + m[0]*m[7]*m[9] + m[4]*m[1]*m[11] - m[4]*m[3]*m[9] - m[8]*m[1]*m[7] + m[8]*m[3]*m[5],
+
+        -m[4]*m[9]*m[14] + m[4]*m[10]*m[13] + m[8]*m[5]*m[14] - m[8]*m[6]*m[13] - m[12]*m[5]*m[10] + m[12]*m[6]*m[9],
+        m[0]*m[9]*m[14] - m[0]*m[10]*m[13] - m[8]*m[1]*m[14] + m[8]*m[2]*m[13] + m[12]*m[1]*m[10] - m[12]*m[2]*m[9],
+        -m[0]*m[5]*m[14] + m[0]*m[6]*m[13] + m[4]*m[1]*m[14] - m[4]*m[2]*m[13] - m[12]*m[1]*m[6] + m[12]*m[2]*m[5],
         m[0]*m[5]*m[10] - m[0]*m[6]*m[9] - m[4]*m[1]*m[10] + m[4]*m[2]*m[9] + m[8]*m[1]*m[6] - m[8]*m[2]*m[5],
-    ])
+    ]);
 
     var det = m[0]*r[0] + m[4]*r[1] + m[8]*r[2] + m[12]*r[3];
     for (let i = 0; i < 16; i++) r[i] /= det;
@@ -98,6 +98,10 @@ function getOrientation(matrix) {
         z: s / 4,
         w: (matrix[1] - matrix[4]) / s,
     });
+}
+
+function translation(x, y, z) {
+    return new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, x, y, z, 1]);
 }
 
 window.leiaManager = (function() {
@@ -272,17 +276,15 @@ class XRViewerPose extends XRPose {
 
 class XRView {
     #viewSpace;
-    #eye;
     #projectionMatrix;
     #transform;
-    constructor(viewSpace, projectionMatrix, transform, eye = 'none') {
-        this.#eye = eye;
+    constructor(viewSpace, projectionMatrix, transform) {
         this.#viewSpace = viewSpace;
         this.#projectionMatrix = projectionMatrix;
         this.#transform = transform;
     }
 
-    get eye() { return this.#eye; }
+    get eye() { return this.#viewSpace.eye; }
     get projectionMatrix() { return this.#projectionMatrix; }
     get transform() { return this.#transform; }
 
@@ -317,9 +319,9 @@ class XRSpace extends EventTarget {
     }
 }
 class XRViewSpace extends XRSpace {
-    constructor(projectionMatrix, originOffset) {
+    constructor(eye, originOffset) {
         super(originOffset);
-        this.projectionMatrix = projectionMatrix;
+        this.eye = eye;
     }
 }
 class XRReferenceSpace extends XRSpace {
@@ -360,15 +362,17 @@ class XRFrame {
         const transform = XRRigidTransform._fromMatrix(refSpaceMatrix);
 
         const invertedRefSpaceMatrix = invert(refSpaceMatrix);
-        const views = this.#device.viewSpaces.map(viewSpace => {
+        const { projectionMatrix, viewSpaces } = this.#device;
+        const views = viewSpaces.map(viewSpace => {
             const relativeMatrix = multiply(invertedRefSpaceMatrix, viewSpace._originOffset);
-            return new XRView(viewSpace, viewSpace.projectionMatrix, XRRigidTransform._fromMatrix(relativeMatrix));
+            return new XRView(viewSpace, projectionMatrix, XRRigidTransform._fromMatrix(relativeMatrix));
         });
         return new XRViewerPose(transform, views);
     }
 }
 
 class XRDevice {
+    #projectionMatrix;
     #viewSpaces;
     #viewports;
     #oldState;
@@ -376,7 +380,12 @@ class XRDevice {
     #oldHeight;
 
     constructor(viewSpaces) {
+        this.#projectionMatrix = new Float32Array(16);
         this.#viewSpaces = viewSpaces;
+    }
+
+    get projectionMatrix() {
+        return this.#projectionMatrix;
     }
 
     get viewSpaces() {
@@ -406,9 +415,23 @@ class XRDevice {
         if (contextChanged || sizeChanged) {
             this.#oldWidth = width;
             this.#oldHeight = height;
-            this._updateViewSpaces(renderState, width, height)
+            const fov = this._getFov(renderState);
+            const aspectRatio = width / height;
+            const { depthNear, depthFar } = renderState;
+            this._updateProjectionMatrix(fov, aspectRatio, depthNear, depthFar);
             this.#viewports = this._computeViewports(width, height);
         }
+    }
+
+    _updateProjectionMatrix(fov, aspectRatio, depthNear, depthFar) {
+        const target = this.#projectionMatrix;
+
+        const s = 1 / Math.tan(fov / 2);
+        target[0] = s / aspectRatio;
+        target[5] = s;
+        target[10] = -(depthFar + depthNear) / (depthFar - depthNear);
+        target[11] = -1;
+        target[14] = -2 * depthFar * depthNear / (depthFar - depthNear);
     }
 
     draw() {
@@ -421,34 +444,20 @@ class XRDevice {
 
     _onContextChanged(context) {}
     _updateViewSpaces(renderState, width, height) {}
+    _getFov(renderState) {}
     _computeViewports(width, height) {}
     _draw(context, width, height) {}
 }
 class InlineXRDevice extends XRDevice {
-    #projectionMatrix;
     #viewSpace;
 
     constructor() {
-        const projectionMatrix = new Float32Array(16);
-        const viewSpace = new XRViewSpace(projectionMatrix, IDENTITY_MATRIX);
+        const viewSpace = new XRViewSpace('none', IDENTITY_MATRIX);
         super([viewSpace]);
-        this.#projectionMatrix = projectionMatrix;
         this.#viewSpace = viewSpace;
     }
 
-    _updateViewSpaces(renderState, width, height) {
-        const { depthNear, depthFar, inlineVerticalFieldOfView } = renderState;
-        const fov = inlineVerticalFieldOfView || (Math.PI / 2); // TODO: shouldn't need this
-        const target = this.#projectionMatrix;
-
-        const aspectRatio = width / height;
-        const s = 1 / Math.tan(fov / 2);
-        target[0] = s / aspectRatio;
-        target[5] = s;
-        target[10] = -(depthFar + depthNear) / (depthFar - depthNear);
-        target[11] = -1;
-        target[14] = -2 * depthFar * depthNear / (depthFar - depthNear);
-    }
+    _getFov(renderState) { return renderState.inlineVerticalFieldOfView; }
 
     _computeViewports(width, height) {
         return [
@@ -466,14 +475,19 @@ void main() {
 }`;
 
 const FRAGMENT_SHADER =`
-precision mediump float;
+precision highp float;
 varying vec2 v_TexCoord;
 uniform sampler2D u_Texture;
+
 void main() {
-    gl_FragColor = texture2D(u_Texture, v_TexCoord);
+    float eye = mod(gl_FragCoord.x - 0.5, 4.0) / 4.0;
+
+    float corrected_x = v_TexCoord.x / 4.0 + eye;
+
+    gl_FragColor = texture2D(u_Texture, vec2(corrected_x, v_TexCoord.y));
 }`;
 
-class LeiaXRDevice extends InlineXRDevice { // TODO: just extend the base
+class LeiaXRDevice extends XRDevice {
     #framebuffer = null;
     #texture = null;
     #positionBuffer = null;
@@ -485,6 +499,19 @@ class LeiaXRDevice extends InlineXRDevice { // TODO: just extend the base
     #texCoordLocation = null;
     #textureLocation = null;
 
+    #viewSpaces = [];
+
+    constructor() {
+        const viewSpaces = [
+            new XRViewSpace('left', translation(-0.065, 0, 0)),
+            new XRViewSpace('left', translation(-0.0325, 0, 0)),
+            new XRViewSpace('right', translation(0.0325, 0, 0)),
+            new XRViewSpace('right', translation(0.065, 0, 0)),
+        ];
+        super(viewSpaces);
+        this.#viewSpaces = viewSpaces;
+    }
+
     onSessionStart(session) {
         leiaManager.activate(session);
     }
@@ -495,6 +522,18 @@ class LeiaXRDevice extends InlineXRDevice { // TODO: just extend the base
 
     get framebuffer() {
         return this.#framebuffer;
+    }
+
+    _getFov() {
+        return Math.PI / 2;  // TODO: should get this from hardware maybe
+    }
+
+    _computeViewports(width, height) {
+        const vpWidth = width / 4;
+        return this.#viewSpaces.map((viewSpace, i) => {
+            const viewport = new XRViewport(vpWidth * i, 0, vpWidth, height);
+            return { viewSpace, viewport };
+        });
     }
 
     _onContextChanged(context) {
@@ -576,7 +615,6 @@ class LeiaXRDevice extends InlineXRDevice { // TODO: just extend the base
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, this.#texture);
 
-        gl.clear(gl.COLOR_BUFFER_BIT);
         gl.drawArrays(gl.TRIANGLES, 0, 6);
     }
 }
