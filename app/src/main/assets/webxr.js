@@ -505,10 +505,10 @@ class LeiaXRDevice extends XRDevice {
 
     constructor() {
         const viewSpaces = [
-            new XRViewSpace('left', translation(-0.065, 0, 0)),
-            new XRViewSpace('left', translation(-0.0325, 0, 0)),
-            new XRViewSpace('right', translation(0.0325, 0, 0)),
-            new XRViewSpace('right', translation(0.065, 0, 0)),
+            new XRViewSpace('left', translation(-0.01625, 0, 0)),
+            new XRViewSpace('left', translation(-0.008125, 0, 0)),
+            new XRViewSpace('right', translation(0.008125, 0, 0)),
+            new XRViewSpace('right', translation(0.01625, 0, 0)),
         ];
         super(viewSpaces);
         this.#viewSpaces = viewSpaces;
