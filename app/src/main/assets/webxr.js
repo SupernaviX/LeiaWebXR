@@ -69,6 +69,15 @@ function fromPose(target, { x, y, z, w }, { x: qx, y: qy, z: qz, w: qw }) {
     target[14] = z;
     target[15] = w;
 }
+function multiplyQuaternion([x1, y1, z1, w1], [x2, y2, z2, w2]) {
+    return [
+        x1*w2 - y1*z2 + z1*y2 + w1*x2,
+        x1*z2 + y1*w2 + z1*x2 - w1*y2,
+        x1*y2 + y1*x2 - z1*w2 + w1*z2,
+        x1*x2 - y1*y2 - z1*z2 - w1*w2,
+    ];
+}
+
 
 function getPosition(matrix) {
     return DOMPointReadOnly.fromPoint({
@@ -323,14 +332,14 @@ class XRViewSpace extends XRSpace {
     }
 }
 class XRReferenceSpace extends XRSpace {
-    #type;
+    _type;
     constructor(type, originOffset) {
         super(originOffset);
-        this.#type = type;
+        this._type = type;
     }
     getOffsetReferenceSpace(additionalOffset) {
         const newOffset = multiply(this._originOffset, additionalOffset.matrix);
-        return new XRReferenceSpace(this.#type, newOffset);
+        return new XRReferenceSpace(this._type, newOffset);
     }
 }
 
@@ -357,6 +366,9 @@ class XRFrame {
 
     getViewerPose(refSpace) {
         const invertedRefSpaceMatrix = invert(refSpace._originOffset);
+        if (refSpace._type === 'local-floor') {
+            invertedRefSpaceMatrix[13] += this.#device.viewerHeight;
+        }
         const transform = XRRigidTransform._fromMatrix(invertedRefSpaceMatrix);
 
         const { projectionMatrix, viewSpaces } = this.#device;
@@ -401,6 +413,10 @@ class XRDevice {
 
     getViewport(view) {
         return view._findViewport(this.#viewports);
+    }
+
+    get viewerHeight() {
+        return 1.6; // TODO: get this from hardware maybe?
     }
 
     onSessionStart() {}
@@ -550,33 +566,14 @@ class LeiaXRDevice extends XRDevice {
         }
     }
 
-    multiplyQuaternion([x1, y1, z1, w1], [x2, y2, z2, w2]) {
-        return [
-            x1*w2 - y1*z2 + z1*y2 + w1*x2,
-            x1*z2 + y1*w2 + z1*x2 - w1*y2,
-            x1*y2 + y1*x2 - z1*w2 + w1*z2,
-            x1*x2 - y1*y2 - z1*z2 - w1*w2,
-        ];
-    }
-
-    rotatePointByQuaternion({ x, y, z }, [qx, qy, qz, qw]) {
-        const pointQ = [x, y, z, 0];
-        const [finalx, finaly, finalz] = this.multiplyQuaternion(
-            [-qx, -qy, -qz, qw],
-            this.multiplyQuaternion(pointQ, [qx, qy, qz, qw]),
-        );
-        return { x: finalx, y: finaly, z: finalz, w: 1 };
-    }
-
     #updateMatrix(type, matrix) {
         switch (type) {
             case 'local':
             case 'local-floor':
                 let [qx, qy, qz, qw] = this.#sensor.quaternion || [0, 0, 0, 1];
-                //const position = this.rotatePointByQuaternion({ x: 0, y: type === 'local-floor' ? 0 : 0, z: 0 }, [0, 0, 0, 1]);
-                const position = { x: 0, y: type === 'local-floor' ? -1.6 : 0, z: 0, w: 1 };
-                [qx, qy, qz, qw] = this.multiplyQuaternion([-qx, -qy, qz, -qw], [Math.cos(Math.PI / 4), 0, 0, -Math.cos(Math.PI / 4)]);
+                [qx, qy, qz, qw] = multiplyQuaternion([-qx, -qy, qz, -qw], [Math.cos(Math.PI / 4), 0, 0, -Math.cos(Math.PI / 4)]);
 
+                const position = { x: 0, y: 0, z: 0, w: 1 };
                 const orientation = { x: qx, y: qy, z: qz, w: qw };
                 fromPose(matrix, position, orientation);
                 return;
