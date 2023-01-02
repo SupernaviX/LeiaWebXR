@@ -583,7 +583,7 @@ class LeiaXRDevice extends XRDevice {
     }
 
     _getFov() {
-        return Math.PI / 2;  // TODO: should get this from hardware maybe
+        return 0.75 * Math.PI / 2;  // TODO: should get this from hardware maybe
     }
 
     _computeViewports(width, height) {
