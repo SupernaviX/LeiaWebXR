@@ -51,6 +51,24 @@ function invert(m) {
     for (let i = 0; i < 16; i++) r[i] /= det;
     return r;
 };
+function fromPose(target, { x, y, z, w }, { x: qx, y: qy, z: qz, w: qw }) {
+    target[0] = 1 - 2 * (qy**2 + qz**2);
+    target[1] = 2 * (qx * qy + qz * qw);
+    target[2] = 2 * (qx * qz - qy * qw);
+    target[3] = 0;
+    target[4] = 2 * (qx * qy - qz * qw);
+    target[5] = 1 - 2 * (qx**2 + qz**2);
+    target[6] = 2 * (qy * qz + qx * qw);
+    target[7] = 0;
+    target[8] = 2 * (qx * qz + qy * qw);
+    target[9] = 2 * (qy * qz - qx * qw);
+    target[10] = 1 - 2 * (qx**2 + qy**2);
+    target[11] = 0;
+    target[12] = x;
+    target[13] = y;
+    target[14] = z;
+    target[15] = w;
+}
 
 function getPosition(matrix) {
     return DOMPointReadOnly.fromPoint({
@@ -210,26 +228,8 @@ class XRRigidTransform {
     get orientation() { return this.#orientation; }
     get matrix() {
         if (this.#matrix === null) {
-            const { x, y, z, w } = this.#position;
-            const { x: qx, y: qy, z: qz, w: qw } = this.#orientation;
-            this.#matrix = new Float32Array([
-                1 - 2 * (qy**2 + qz**2),
-                2 * (qx * qy + qz * qw),
-                2 * (qx * qz - qy * qw),
-                0,
-                2 * (qx * qy - qz * qw),
-                1 - 2 * (qx**2 + qz**2),
-                2 * (qy * qz + qx * qw),
-                0,
-                2 * (qx * qz + qy * qw),
-                2 * (qy * qz - qx * qw),
-                1 - 2 * (qx**2 + qy**2),
-                0,
-                x,
-                y,
-                z,
-                w,
-            ]);
+            this.#matrix = new Float32Array(16);
+            fromPose(this.#matrix, this.#position, this.#orientation);
         }
         return this.#matrix;
     }
@@ -250,10 +250,6 @@ class XRRigidTransform {
         return this.#inverse;
     }
 }
-const IDENTITY_TRANSFORM = new XRRigidTransform(
-    { x: 0, y: 0, z: 0, w: 1 },
-    { x: 0, y: 0, z: 0, w: 1 }
-);
 
 class XRPose {
     #transform;
@@ -397,6 +393,12 @@ class XRDevice {
         return null;
     }
 
+    getReferenceSpace(type) {
+        throw new Error(`Reference spaces of type ${type} are not supported`);
+    }
+
+    refreshReferenceSpaces() {}
+
     getViewport(view) {
         return view._findViewport(this.#viewports);
     }
@@ -500,6 +502,9 @@ class LeiaXRDevice extends XRDevice {
     #texCoordLocation = null;
     #textureLocation = null;
 
+    #sensor;
+    #matrices;
+
     #viewSpaces = [];
 
     constructor() {
@@ -511,18 +516,73 @@ class LeiaXRDevice extends XRDevice {
         ];
         super(viewSpaces);
         this.#viewSpaces = viewSpaces;
+        this.#sensor = new RelativeOrientationSensor({ frequency: 60, referenceFrame: 'screen' });
+        this.#matrices = new Map();
     }
 
     onSessionStart(session) {
         leiaManager.activate(session);
+        this.#sensor.start();
     }
 
     onSessionEnd() {
         leiaManager.deactivate();
+        this.#sensor.stop();
     }
 
     get framebuffer() {
         return this.#framebuffer;
+    }
+
+    getReferenceSpace(type) {
+        let matrix = this.#matrices.get(type);
+        if (!matrix) {
+            matrix = new Float32Array(16);
+            this.#updateMatrix(type, matrix);
+            this.#matrices.set(type, matrix);
+        }
+        return new XRReferenceSpace(type, matrix);
+    }
+
+    refreshReferenceSpaces() {
+        for (const [type, matrix] of this.#matrices) {
+            this.#updateMatrix(type, matrix);
+        }
+    }
+
+    multiplyQuaternion([x1, y1, z1, w1], [x2, y2, z2, w2]) {
+        return [
+            x1*w2 - y1*z2 + z1*y2 + w1*x2,
+            x1*z2 + y1*w2 + z1*x2 - w1*y2,
+            x1*y2 + y1*x2 - z1*w2 + w1*z2,
+            x1*x2 - y1*y2 - z1*z2 - w1*w2,
+        ];
+    }
+
+    rotatePointByQuaternion({ x, y, z }, [qx, qy, qz, qw]) {
+        const pointQ = [x, y, z, 0];
+        const [finalx, finaly, finalz] = this.multiplyQuaternion(
+            [-qx, -qy, -qz, qw],
+            this.multiplyQuaternion(pointQ, [qx, qy, qz, qw]),
+        );
+        return { x: finalx, y: finaly, z: finalz, w: 1 };
+    }
+
+    #updateMatrix(type, matrix) {
+        switch (type) {
+            case 'local':
+            case 'local-floor':
+                let [qx, qy, qz, qw] = this.#sensor.quaternion || [0, 0, 0, 1];
+                //const position = this.rotatePointByQuaternion({ x: 0, y: type === 'local-floor' ? 0 : 0, z: 0 }, [0, 0, 0, 1]);
+                const position = { x: 0, y: type === 'local-floor' ? -1.6 : 0, z: 0, w: 1 };
+                [qx, qy, qz, qw] = this.multiplyQuaternion([-qx, -qy, qz, -qw], [Math.cos(Math.PI / 4), 0, 0, -Math.cos(Math.PI / 4)]);
+
+                const orientation = { x: qx, y: qy, z: qz, w: qw };
+                fromPose(matrix, position, orientation);
+                return;
+            default:
+                throw new Error(`Reference spaces of type ${type} are not supported`);
+        }
     }
 
     _getFov() {
@@ -717,10 +777,10 @@ class XRSession extends EventTarget {
     }
 
     async requestReferenceSpace(type) {
-        //if (type === 'viewer') {
+        if (type === 'viewer') {
             return this.#viewerReferenceSpace;
-        //}
-        throw new TypeError("Only support viewer");
+        }
+        return this._device.getReferenceSpace(type);
     }
 
     requestAnimationFrame(callback) {
@@ -754,6 +814,7 @@ class XRSession extends EventTarget {
         frame._setTimes(timestamp, timestamp);
         if (this.#shouldRenderFrame()) {
             this._device.updateDisplay(this.#activeRenderState);
+            this._device.refreshReferenceSpaces();
 
             this.#runningAnimationFrameCallbacks = this.#animationFrameCallbacks;
             this.#animationFrameCallbacks = [];
