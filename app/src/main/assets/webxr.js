@@ -216,18 +216,18 @@ class XRRigidTransform {
                 1 - 2 * (qy**2 + qz**2),
                 2 * (qx * qy + qz * qw),
                 2 * (qx * qz - qy * qw),
-                x,
+                0,
                 2 * (qx * qy - qz * qw),
                 1 - 2 * (qx**2 + qz**2),
                 2 * (qy * qz + qx * qw),
-                y,
+                0,
                 2 * (qx * qz + qy * qw),
                 2 * (qy * qz - qx * qw),
                 1 - 2 * (qx**2 + qy**2),
+                0,
+                x,
+                y,
                 z,
-                0,
-                0,
-                0,
                 w,
             ]);
         }
@@ -360,10 +360,9 @@ class XRFrame {
     get predictedDisplayTime() { return this.#predictedDisplayTime; }
 
     getViewerPose(refSpace) {
-        const refSpaceMatrix = refSpace._originOffset;
-        const transform = XRRigidTransform._fromMatrix(refSpaceMatrix);
+        const invertedRefSpaceMatrix = invert(refSpace._originOffset);
+        const transform = XRRigidTransform._fromMatrix(invertedRefSpaceMatrix);
 
-        const invertedRefSpaceMatrix = invert(refSpaceMatrix);
         const { projectionMatrix, viewSpaces } = this.#device;
         const views = viewSpaces.map(viewSpace => {
             const relativeMatrix = multiply(invertedRefSpaceMatrix, viewSpace._originOffset);
