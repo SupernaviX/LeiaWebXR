@@ -71,13 +71,17 @@ function fromPose(target, { x, y, z, w }, { x: qx, y: qy, z: qz, w: qw }) {
 }
 function multiplyQuaternion([x1, y1, z1, w1], [x2, y2, z2, w2]) {
     return [
-        x1*w2 - y1*z2 + z1*y2 + w1*x2,
-        x1*z2 + y1*w2 + z1*x2 - w1*y2,
-        x1*y2 + y1*x2 - z1*w2 + w1*z2,
-        x1*x2 - y1*y2 - z1*z2 - w1*w2,
+        x1*w2 + w1*x2 + y1*z2 - z1*y2,
+        y1*w2 + w1*y2 + z1*x2 - x1*z2,
+        z1*w2 + w1*z2 + x1*y2 - y1*x2,
+        w1*w2 - x1*x2 - y1*y2 - z1*z2,
     ];
 }
 
+function lookStraightAhead([x, y, z, w]) {
+    const norm = Math.sqrt(y**2 + w**2);
+    return [0, y / norm, 0, w / norm];
+}
 
 function getPosition(matrix) {
     return DOMPointReadOnly.fromPoint({
@@ -518,8 +522,9 @@ class LeiaXRDevice extends XRDevice {
     #texCoordLocation = null;
     #textureLocation = null;
 
-    #sensor;
-    #matrices;
+    #sensor = new RelativeOrientationSensor({ frequency: 60, referenceFrame: 'screen' });
+    #matrices = new Map();
+    #forwardQ = null;
 
     #viewSpaces = [];
 
@@ -532,8 +537,6 @@ class LeiaXRDevice extends XRDevice {
         ];
         super(viewSpaces);
         this.#viewSpaces = viewSpaces;
-        this.#sensor = new RelativeOrientationSensor({ frequency: 60, referenceFrame: 'screen' });
-        this.#matrices = new Map();
     }
 
     onSessionStart(session) {
@@ -570,16 +573,36 @@ class LeiaXRDevice extends XRDevice {
         switch (type) {
             case 'local':
             case 'local-floor':
-                let [qx, qy, qz, qw] = this.#sensor.quaternion || [0, 0, 0, 1];
-                [qx, qy, qz, qw] = multiplyQuaternion([-qx, -qy, qz, -qw], [Math.cos(Math.PI / 4), 0, 0, -Math.cos(Math.PI / 4)]);
-
                 const position = { x: 0, y: 0, z: 0, w: 1 };
-                const orientation = { x: qx, y: qy, z: qz, w: qw };
+                const orientation = this.#getOrientation();
                 fromPose(matrix, position, orientation);
                 return;
             default:
                 throw new Error(`Reference spaces of type ${type} are not supported`);
         }
+    }
+
+    #getOrientation() {
+        if (!this.#sensor.quaternion) {
+            return { x: 0, y: 0, z: 0, w: 1 };
+        }
+        // read screen orientation
+        let [x, y, z, w] = this.#sensor.quaternion;
+
+        // rotate 90 degrees along x axis (so forward is forward instead of down)
+        [x, y, z, w] = multiplyQuaternion([x, y, z, -w], [Math.cos(Math.PI / 4), 0, 0, Math.cos(Math.PI / 4)]);
+
+        if (!this.#forwardQ) {
+            // This must be the first frame we have orientation data.
+            // The direction we are looking along the y axis is now "forward".
+            const [fx, fy, fz, fw] = lookStraightAhead([x, y, z, w]);
+            this.#forwardQ = [fx, -fy, fz, fw];
+        }
+
+        // rotate so everything is relative to our original "forward"
+        [x, y, z, w] = multiplyQuaternion([x, y, z, w], this.#forwardQ);
+
+        return { x, y, z, w };
     }
 
     _getFov() {
@@ -737,6 +760,7 @@ class XRSession extends EventTarget {
     }
     _shutdown() {
         this.#ended = true;
+        this._device.onSessionEnd();
         this.dispatchEvent(new XRSessionEvent('end', { session: this }));
     }
 
