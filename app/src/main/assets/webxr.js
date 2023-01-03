@@ -347,6 +347,34 @@ class XRReferenceSpace extends XRSpace {
     }
 }
 
+class XRInputSourceEvent extends Event {
+    #frame;
+    #inputSource;
+    constructor(type, { frame, inputSource, ...eventInitDict }) {
+        super(type, eventInitDict);
+        this.#frame = frame;
+        this.#inputSource = inputSource;
+    }
+
+    get frame() { return this.#frame; }
+    get inputSource() { return this.#inputSource; }
+}
+// hard-coded to the screen
+class XRInputSource {
+    #device;
+    constructor(device) {
+        this.#device = device;
+    }
+    get handedness() { return 'none'; }
+    get targetRayMode() { return 'screen'; }
+    get targetRaySpace() {
+        // I think this points to the center of the screen?
+        return new XRSpace(IDENTITY_MATRIX);
+    }
+    get gripSpace() { return null; }
+    get profiles() { return ["generic-touchpad"]; }
+}
+
 class XRFrame {
     #session;
     #device;
@@ -369,6 +397,9 @@ class XRFrame {
     get predictedDisplayTime() { return this.#predictedDisplayTime; }
 
     getViewerPose(refSpace) {
+        if (!this.#animationFrame) {
+            throw new Error('Cannot call getViewerPose on this frame');
+        }
         const invertedRefSpaceMatrix = invert(refSpace._originOffset);
         if (refSpace._type === 'local-floor') {
             invertedRefSpaceMatrix[13] += this.#device.viewerHeight;
@@ -382,19 +413,78 @@ class XRFrame {
         });
         return new XRViewerPose(transform, views);
     }
+    getPose(space, baseSpace) {
+        const invertedBaseSpaceMatrix = invert(baseSpace._originOffset);
+        if (baseSpace._type === 'local-floor') {
+            invertedBaseSpaceMatrix[13] += this.#device.viewerHeight;
+        }
+        const relativeMatrix = multiply(invertedBaseSpaceMatrix, space._originOffset);
+        const transform = XRRigidTransform._fromMatrix(relativeMatrix);
+        Object.assign(transform, relativeMatrix); // avoid weird bug in demos
+        return new XRPose(transform);
+    }
+}
+
+class CanvasInputDevice {
+    #sessions = new Set();
+    #touchInputSources = new Map();
+    #seenCanvases = new WeakSet();
+    constructor() {
+        this.handleTouchStart = this.handleTouchStart.bind(this);
+        this.handleTouchEnd = this.handleTouchEnd.bind(this);
+    }
+
+    addSession(session) {
+        this.#sessions.add(session);
+    }
+
+    removeSession(session) {
+        this.#sessions.delete(session);
+    }
+
+    listenOnCanvas(canvas) {
+        if (!this.#seenCanvases.has(canvas)) {
+            this.#seenCanvases.add(canvas);
+            canvas.addEventListener('touchstart', this.handleTouchStart);
+            canvas.addEventListener('touchend', this.handleTouchEnd);
+        }
+    }
+
+    handleTouchStart(event) {
+        const now = performance.now();
+        for (const touch of event.changedTouches) {
+            const inputSource = new XRInputSource();
+            this.#touchInputSources.set(touch.identifier, inputSource);
+            for (const session of this.#sessions) {
+                session._handleSelectStart(inputSource, now);
+            }
+        }
+    }
+
+    handleTouchEnd(event) {
+        const now = performance.now();
+        for (const touch of event.changedTouches) {
+            const inputSource = this.#touchInputSources.get(touch.identifier);
+            if (!inputSource) continue;
+            for (const session of this.#sessions) {
+                session._handleSelectEnd(inputSource, now);
+            }
+        }
+    }
 }
 
 class XRDevice {
-    #projectionMatrix;
+    #projectionMatrix = new Float32Array(16);
     #viewSpaces;
     #viewports;
     #oldState;
     #oldWidth;
     #oldHeight;
+    #canvasInput = new CanvasInputDevice();
 
-    constructor(viewSpaces) {
-        this.#projectionMatrix = new Float32Array(16);
+    constructor(viewSpaces, canvasInput) {
         this.#viewSpaces = viewSpaces;
+        this.#canvasInput = canvasInput;
     }
 
     get projectionMatrix() {
@@ -423,8 +513,12 @@ class XRDevice {
         return 1.6; // TODO: get this from hardware maybe?
     }
 
-    onSessionStart() {}
-    onSessionEnd() {}
+    onSessionStart(session) {
+        this.#canvasInput.addSession(session);
+    }
+    onSessionEnd(session) {
+        this.#canvasInput.removeSession(session);
+    }
 
     updateDisplay(renderState) {
         const { baseLayer, _context: context } = renderState;
@@ -433,6 +527,7 @@ class XRDevice {
         const sizeChanged = this.#oldWidth !== width || this.#oldHeight !== height;
         if (contextChanged) {
             this.#oldState = renderState;
+            this._listenForTouchEvents(context);
             this._onContextChanged(context);
         }
         if (contextChanged || sizeChanged) {
@@ -443,6 +538,12 @@ class XRDevice {
             const { depthNear, depthFar } = renderState;
             this._updateProjectionMatrix(fov, aspectRatio, depthNear, depthFar);
             this.#viewports = this._computeViewports(width, height);
+        }
+    }
+
+    _listenForTouchEvents(context) {
+        if (context !== null) {
+            this.#canvasInput.listenOnCanvas(context.canvas);
         }
     }
 
@@ -474,9 +575,9 @@ class XRDevice {
 class InlineXRDevice extends XRDevice {
     #viewSpace;
 
-    constructor() {
+    constructor(canvasInput) {
         const viewSpace = new XRViewSpace('none', IDENTITY_MATRIX);
-        super([viewSpace]);
+        super([viewSpace], canvasInput);
         this.#viewSpace = viewSpace;
     }
 
@@ -528,23 +629,25 @@ class LeiaXRDevice extends XRDevice {
 
     #viewSpaces = [];
 
-    constructor() {
+    constructor(canvasInput) {
         const viewSpaces = [
             new XRViewSpace('left', translation(-0.01625, 0, 0)),
             new XRViewSpace('left', translation(-0.008125, 0, 0)),
             new XRViewSpace('right', translation(0.008125, 0, 0)),
             new XRViewSpace('right', translation(0.01625, 0, 0)),
         ];
-        super(viewSpaces);
+        super(viewSpaces, canvasInput);
         this.#viewSpaces = viewSpaces;
     }
 
     onSessionStart(session) {
+        super.onSessionStart(session);
         leiaManager.activate(session);
         this.#sensor.start();
     }
 
-    onSessionEnd() {
+    onSessionEnd(session) {
+        super.onSessionEnd(session);
         leiaManager.deactivate();
         this.#sensor.stop();
     }
@@ -629,16 +732,18 @@ class LeiaXRDevice extends XRDevice {
         this.#framebuffer = gl.createFramebuffer();
         gl.bindFramebuffer(gl.FRAMEBUFFER, this.#framebuffer);
 
+        const { alpha, depth, stencil } = gl.getContextAttributes();
+
         this.#texture = gl.createTexture();
+        const format = alpha ? gl.RGBA : gl.RGB;
         gl.bindTexture(gl.TEXTURE_2D, this.#texture);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, width, height, 0, gl.RGB, gl.UNSIGNED_BYTE, null);
+        gl.texImage2D(gl.TEXTURE_2D, 0, format, width, height, 0, format, gl.UNSIGNED_BYTE, null);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
         gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.#texture, 0);
 
-        const { depth, stencil } = gl.getContextAttributes();
         if (depth || stencil) {
             const dsBuffer = gl.createRenderbuffer();
             gl.bindRenderbuffer(gl.RENDERBUFFER, dsBuffer);
@@ -690,6 +795,8 @@ class LeiaXRDevice extends XRDevice {
     }
 
     _draw(gl, width, height) {
+        gl.depthFunc(gl.LESS);
+
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
         gl.viewport(0, 0, width, height);
         const positionVertices = new Float32Array([
@@ -726,6 +833,7 @@ class XRSessionEvent extends Event {
 class XRSession extends EventTarget {
     #animationFrame;
     #ended = false;
+    #paused = false;
     #activeRenderState;
     #pendingRenderState = null;
     #animationFrameCallbacks = [];
@@ -733,7 +841,7 @@ class XRSession extends EventTarget {
     #animationFrameCallbackIdentifier = 0;
     #windowRafHandle;
     #viewerReferenceSpace;
-    _device;
+    #inputSources;
 
     constructor(mode, device) {
         super();
@@ -750,6 +858,7 @@ class XRSession extends EventTarget {
         });
         this.#viewerReferenceSpace = new XRReferenceSpace("viewer", IDENTITY_MATRIX);
         this.#windowRafHandle = window.requestAnimationFrame(timestamp => this.#onWindowAnimationFrame(timestamp));
+        this.#inputSources = [];
     }
 
     async end() {
@@ -760,13 +869,34 @@ class XRSession extends EventTarget {
     }
     _shutdown() {
         this.#ended = true;
-        this._device.onSessionEnd();
+        this._device.onSessionEnd(this);
         this.dispatchEvent(new XRSessionEvent('end', { session: this }));
+    }
+
+    _handleSelectStart(inputSource, now) {
+        if (this.#paused || this.#ended) return;
+
+        this.#inputSources.push(inputSource);
+        const frame = new XRFrame(this, this._device, false);
+        frame._setTimes(now, now);
+
+        this.dispatchEvent(new XRInputSourceEvent('selectstart', { frame, inputSource }));
+    }
+
+    _handleSelectEnd(inputSource, now) {
+        this.#inputSources = this.#inputSources.filter(is => is !== inputSource);
+        if (this.#paused || this.#ended) return;
+
+        const frame = new XRFrame(this, this._device, false);
+        frame._setTimes(now, now);
+
+        this.dispatchEvent(new XRInputSourceEvent('select', { frame, inputSource }));
+        this.dispatchEvent(new XRInputSourceEvent('selectend', { frame, inputSource }));
     }
 
     get renderState() { return this.#activeRenderState; }
 
-    get inputSources() { return []; }
+    get inputSources() { return this.#inputSources; }
 
     updateRenderState(state) {
         if (this.#ended) {
@@ -827,8 +957,19 @@ class XRSession extends EventTarget {
         });
     }
 
+    _pause() {
+        this.#paused = true;
+    }
+    _resume() {
+        this.#paused = false;
+    }
+
     #onWindowAnimationFrame(timestamp) {
         if (this.#ended) {
+            return;
+        }
+        this.#windowRafHandle = window.requestAnimationFrame(timestamp => this.#onWindowAnimationFrame(timestamp))
+        if (this.#paused) {
             return;
         }
         const frame = this.#animationFrame;
@@ -854,7 +995,6 @@ class XRSession extends EventTarget {
         if (this.#pendingRenderState) {
             this.#applyPendingRenderState();
         }
-        this.#windowRafHandle = window.requestAnimationFrame(timestamp => this.#onWindowAnimationFrame(timestamp))
     }
 
     #shouldRenderFrame() {
@@ -877,7 +1017,9 @@ class XRSession extends EventTarget {
 }
 
 class XRSystem extends EventTarget {
+    #canvasInput = new CanvasInputDevice();
     #immersiveSession = null;
+    #inlineSessions = new Set();
     async isSessionSupported(mode) {
         return true;
     }
@@ -887,10 +1029,15 @@ class XRSystem extends EventTarget {
             throw new Error('you already have one running');
         }
 
-        const device = isInline ? new InlineXRDevice() : new LeiaXRDevice();
+        const device = isInline ? new InlineXRDevice(this.#canvasInput) : new LeiaXRDevice(this.#canvasInput);
         const session = new XRSession(mode, device);
-        if (!isInline) {
+        if (isInline) {
+            this.#inlineSessions.add(session);
+        } else {
             this.#immersiveSession = session;
+            for (const inline of this.#inlineSessions) {
+                inline._pause();
+            }
         }
         device.onSessionStart(session);
         return session;
@@ -898,7 +1045,11 @@ class XRSystem extends EventTarget {
     _shutdownSession(session) {
         if (this.#immersiveSession === session) {
             this.#immersiveSession = null;
+            for (const inline of this.#inlineSessions) {
+                inline._resume();
+            }
         }
+        this.#inlineSessions.delete(session);
         session._shutdown();
     }
 }

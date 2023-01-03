@@ -39,7 +39,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        webView.loadUrl("https://immersive-web.github.io/webxr-samples/immersive-vr-session.html?usePolyfill=0")
+        webView.loadUrl("https://immersive-web.github.io/webxr-samples/input-selection.html?usePolyfill=0")
     }
 
     class LeiaInterface(context: Context) {
