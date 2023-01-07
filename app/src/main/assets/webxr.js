@@ -382,8 +382,8 @@ class XRInputSourceEvent extends Event {
 // hard-coded to the screen
 class XRInputSource {
     #space;
-    constructor(matrix) {
-        this.#space = new XRSpace(matrix);
+    constructor() {
+        this.#space = new XRSpace(new Float32Array(16));
     }
     get handedness() { return 'none'; }
     get targetRayMode() { return 'screen'; }
@@ -392,6 +392,9 @@ class XRInputSource {
     }
     get gripSpace() { return null; }
     get profiles() { return ["generic-touchpad"]; }
+    _getMatrix() {
+        return this.#space._originOffset;
+    }
 }
 
 class XRFrame {
@@ -452,6 +455,7 @@ class CanvasInputDevice {
 
     constructor() {
         this.handleTouchStart = this.handleTouchStart.bind(this);
+        this.handleTouchMove = this.handleTouchMove.bind(this);
         this.handleTouchEnd = this.handleTouchEnd.bind(this);
     }
 
@@ -471,31 +475,18 @@ class CanvasInputDevice {
         if (!this.#seenCanvases.has(canvas)) {
             this.#seenCanvases.add(canvas);
             canvas.addEventListener('touchstart', this.handleTouchStart);
+            canvas.addEventListener('touchmove', this.handleTouchMove);
             canvas.addEventListener('touchend', this.handleTouchEnd);
         }
     }
 
     handleTouchStart(event) {
+        event.preventDefault();
         const now = performance.now();
         for (const touch of event.changedTouches) {
-            const { clientX, clientY, target: { clientWidth, clientHeight } } = touch;
+            const inputSource = new XRInputSource();
+            this.#updateMatrixFromTouch(inputSource._getMatrix(), touch);
 
-            const screenX = 2 * clientX / clientWidth - 1;
-            const screenY = 1 - 2 * clientY / clientHeight;
-
-            const worldPoint = transformVector({ x: screenX, y: screenY, z: 1, w: 1 }, this.#inverseProjectionMatrix);
-            const orientation = normalizeVector({
-                x: worldPoint.y,
-                y: -worldPoint.x,
-                z: 0,
-                w: Math.sqrt(worldPoint.x ** 2 + worldPoint.y ** 2 + worldPoint.z ** 2) - worldPoint.z
-            });
-
-
-            const matrix = new Float32Array(16);
-            fromPose(matrix, { x: 0, y: 0, z: 0, w: 1 }, orientation);
-
-            const inputSource = new XRInputSource(matrix);
             this.#touchInputSources.set(touch.identifier, inputSource);
             for (const session of this.#sessions) {
                 session._handleSelectStart(inputSource, now);
@@ -503,7 +494,17 @@ class CanvasInputDevice {
         }
     }
 
+    handleTouchMove(event) {
+        event.preventDefault();
+        for (const touch of event.changedTouches) {
+            const inputSource = this.#touchInputSources.get(touch.identifier);
+            if (!inputSource) continue;
+            this.#updateMatrixFromTouch(inputSource._getMatrix(), touch);
+        }
+    }
+
     handleTouchEnd(event) {
+        event.preventDefault();
         const now = performance.now();
         for (const touch of event.changedTouches) {
             const inputSource = this.#touchInputSources.get(touch.identifier);
@@ -512,6 +513,28 @@ class CanvasInputDevice {
                 session._handleSelectEnd(inputSource, now);
             }
         }
+    }
+
+    #updateMatrixFromTouch(matrix, touch) {
+        const position = { x: 0, y: 0, z: 0, w: 1 };
+        const orientation = this.#getOrientationFromTouch(touch);
+
+        fromPose(matrix, position, orientation);
+    }
+
+    #getOrientationFromTouch(touch) {
+        const { clientX, clientY, target: { clientWidth, clientHeight } } = touch;
+
+        const screenX = 2 * clientX / clientWidth - 1;
+        const screenY = 1 - 2 * clientY / clientHeight;
+
+        const worldPoint = transformVector({ x: screenX, y: screenY, z: 1, w: 1 }, this.#inverseProjectionMatrix);
+        return normalizeVector({
+            x: worldPoint.y,
+            y: -worldPoint.x,
+            z: 0,
+            w: Math.sqrt(worldPoint.x ** 2 + worldPoint.y ** 2 + worldPoint.z ** 2) - worldPoint.z
+        });
     }
 }
 
