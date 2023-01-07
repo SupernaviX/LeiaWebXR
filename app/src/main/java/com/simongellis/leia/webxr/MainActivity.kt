@@ -1,6 +1,8 @@
 package com.simongellis.leia.webxr
 
 import android.content.Context
+import android.content.Intent
+import android.content.Intent.ACTION_SEND
 import android.graphics.Bitmap
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
@@ -15,6 +17,8 @@ import com.leia.android.lights.LeiaDisplayManager
 import com.leia.android.lights.LeiaSDK
 
 class MainActivity : AppCompatActivity() {
+    private var _requestedUrl: String? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
@@ -39,7 +43,27 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        webView.loadUrl("https://immersive-web.github.io/webxr-samples/input-selection.html?usePolyfill=0")
+        val requestedUrl = getRequestedUrl(intent) ?: "https://immersive-web.github.io/webxr-samples/"
+        _requestedUrl = requestedUrl
+        webView.loadUrl(requestedUrl)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        getRequestedUrl(intent)?.also {
+            if (_requestedUrl != it) {
+                _requestedUrl = it
+                val webView = findViewById<WebView>(R.id.webview)
+                webView.loadUrl(it)
+            }
+        }
+    }
+
+    private fun getRequestedUrl(intent: Intent): String? {
+        if (intent.action == ACTION_SEND) {
+            return intent.extras?.getString("android.intent.extra.TEXT")
+        }
+        return null
     }
 
     class LeiaInterface(context: Context) {
