@@ -24,33 +24,53 @@ function multiply(m1, m2) {
         m2[12]*m1[3] + m2[13]*m1[7] + m2[14]*m1[11] + m2[15]*m1[15],
     ]);
 }
-function invert(m) {
-    const r = new Float32Array([
-        m[5]*m[10]*m[15] - m[5]*m[11]*m[14] - m[9]*m[6]*m[15] + m[9]*m[7]*m[14] + m[13]*m[6]*m[11] - m[13]*m[7]*m[10],
-        -m[1]*m[10]*m[15] + m[1]*m[11]*m[14] + m[9]*m[2]*m[15] - m[9]*m[3]*m[14] - m[13]*m[2]*m[11] + m[13]*m[3]*m[10],
-        m[1]*m[6]*m[15] - m[1]*m[7]*m[14] - m[5]*m[2]*m[15] + m[5]*m[3]*m[14] + m[13]*m[2]*m[7] - m[13]*m[3]*m[6],
-        -m[1]*m[6]*m[11] + m[1]*m[7]*m[10] + m[5]*m[2]*m[11] - m[5]*m[3]*m[10] - m[9]*m[2]*m[7] + m[9]*m[3]*m[6],
+function invertInto(r, m) {
+    r[0] = m[5]*m[10]*m[15] - m[5]*m[11]*m[14] - m[9]*m[6]*m[15] + m[9]*m[7]*m[14] + m[13]*m[6]*m[11] - m[13]*m[7]*m[10];
+    r[1] = -m[1]*m[10]*m[15] + m[1]*m[11]*m[14] + m[9]*m[2]*m[15] - m[9]*m[3]*m[14] - m[13]*m[2]*m[11] + m[13]*m[3]*m[10];
+    r[2] = m[1]*m[6]*m[15] - m[1]*m[7]*m[14] - m[5]*m[2]*m[15] + m[5]*m[3]*m[14] + m[13]*m[2]*m[7] - m[13]*m[3]*m[6];
+    r[3] = -m[1]*m[6]*m[11] + m[1]*m[7]*m[10] + m[5]*m[2]*m[11] - m[5]*m[3]*m[10] - m[9]*m[2]*m[7] + m[9]*m[3]*m[6];
 
-        -m[4]*m[10]*m[15] + m[4]*m[11]*m[14] + m[8]*m[6]*m[15] - m[8]*m[7]*m[14] - m[12]*m[6]*m[11] + m[12]*m[7]*m[10],
-        m[0]*m[10]*m[15] - m[0]*m[11]*m[14] - m[8]*m[2]*m[15] + m[8]*m[3]*m[14] + m[12]*m[2]*m[11] - m[12]*m[3]*m[10],
-        -m[0]*m[6]*m[15] + m[0]*m[7]*m[14] + m[4]*m[2]*m[15] - m[4]*m[3]*m[14] - m[12]*m[2]*m[7] + m[12]*m[3]*m[6],
-        m[0]*m[6]*m[11] - m[0]*m[7]*m[10] - m[4]*m[2]*m[11] + m[4]*m[3]*m[10] + m[8]*m[2]*m[7] - m[8]*m[3]*m[6],
+    r[4] = -m[4]*m[10]*m[15] + m[4]*m[11]*m[14] + m[8]*m[6]*m[15] - m[8]*m[7]*m[14] - m[12]*m[6]*m[11] + m[12]*m[7]*m[10];
+    r[5] = m[0]*m[10]*m[15] - m[0]*m[11]*m[14] - m[8]*m[2]*m[15] + m[8]*m[3]*m[14] + m[12]*m[2]*m[11] - m[12]*m[3]*m[10];
+    r[6] = -m[0]*m[6]*m[15] + m[0]*m[7]*m[14] + m[4]*m[2]*m[15] - m[4]*m[3]*m[14] - m[12]*m[2]*m[7] + m[12]*m[3]*m[6];
+    r[7] = m[0]*m[6]*m[11] - m[0]*m[7]*m[10] - m[4]*m[2]*m[11] + m[4]*m[3]*m[10] + m[8]*m[2]*m[7] - m[8]*m[3]*m[6];
 
-        m[4]*m[9]*m[15] - m[4]*m[11]*m[13] - m[8]*m[5]*m[15] + m[8]*m[7]*m[13] + m[12]*m[5]*m[11] - m[12]*m[7]*m[9],
-        -m[0]*m[9]*m[15] + m[0]*m[11]*m[13] + m[8]*m[1]*m[15] - m[8]*m[3]*m[13] - m[12]*m[1]*m[11] + m[12]*m[3]*m[9],
-        m[0]*m[5]*m[15] - m[0]*m[7]*m[13] - m[4]*m[1]*m[15] + m[4]*m[3]*m[13] + m[12]*m[1]*m[7] - m[12]*m[3]*m[5],
-        -m[0]*m[5]*m[11] + m[0]*m[7]*m[9] + m[4]*m[1]*m[11] - m[4]*m[3]*m[9] - m[8]*m[1]*m[7] + m[8]*m[3]*m[5],
+    r[8] = m[4]*m[9]*m[15] - m[4]*m[11]*m[13] - m[8]*m[5]*m[15] + m[8]*m[7]*m[13] + m[12]*m[5]*m[11] - m[12]*m[7]*m[9];
+    r[9] = -m[0]*m[9]*m[15] + m[0]*m[11]*m[13] + m[8]*m[1]*m[15] - m[8]*m[3]*m[13] - m[12]*m[1]*m[11] + m[12]*m[3]*m[9];
+    r[10] = m[0]*m[5]*m[15] - m[0]*m[7]*m[13] - m[4]*m[1]*m[15] + m[4]*m[3]*m[13] + m[12]*m[1]*m[7] - m[12]*m[3]*m[5];
+    r[11] = -m[0]*m[5]*m[11] + m[0]*m[7]*m[9] + m[4]*m[1]*m[11] - m[4]*m[3]*m[9] - m[8]*m[1]*m[7] + m[8]*m[3]*m[5];
 
-        -m[4]*m[9]*m[14] + m[4]*m[10]*m[13] + m[8]*m[5]*m[14] - m[8]*m[6]*m[13] - m[12]*m[5]*m[10] + m[12]*m[6]*m[9],
-        m[0]*m[9]*m[14] - m[0]*m[10]*m[13] - m[8]*m[1]*m[14] + m[8]*m[2]*m[13] + m[12]*m[1]*m[10] - m[12]*m[2]*m[9],
-        -m[0]*m[5]*m[14] + m[0]*m[6]*m[13] + m[4]*m[1]*m[14] - m[4]*m[2]*m[13] - m[12]*m[1]*m[6] + m[12]*m[2]*m[5],
-        m[0]*m[5]*m[10] - m[0]*m[6]*m[9] - m[4]*m[1]*m[10] + m[4]*m[2]*m[9] + m[8]*m[1]*m[6] - m[8]*m[2]*m[5],
-    ]);
+    r[12] = -m[4]*m[9]*m[14] + m[4]*m[10]*m[13] + m[8]*m[5]*m[14] - m[8]*m[6]*m[13] - m[12]*m[5]*m[10] + m[12]*m[6]*m[9];
+    r[13] = m[0]*m[9]*m[14] - m[0]*m[10]*m[13] - m[8]*m[1]*m[14] + m[8]*m[2]*m[13] + m[12]*m[1]*m[10] - m[12]*m[2]*m[9];
+    r[14] = -m[0]*m[5]*m[14] + m[0]*m[6]*m[13] + m[4]*m[1]*m[14] - m[4]*m[2]*m[13] - m[12]*m[1]*m[6] + m[12]*m[2]*m[5];
+    r[15] = m[0]*m[5]*m[10] - m[0]*m[6]*m[9] - m[4]*m[1]*m[10] + m[4]*m[2]*m[9] + m[8]*m[1]*m[6] - m[8]*m[2]*m[5];
 
     var det = m[0]*r[0] + m[4]*r[1] + m[8]*r[2] + m[12]*r[3];
     for (let i = 0; i < 16; i++) r[i] /= det;
     return r;
+}
+function invert(m) {
+    return invertInto(new Float32Array(16), m);
 };
+
+function transformVector({ x, y, z, w }, m) {
+    return {
+        x: m[0]*x + m[4]*y + m[8]*z + m[12]*w,
+        y: m[1]*x + m[5]*y + m[9]*z + m[13]*w,
+        z: m[2]*x + m[6]*y + m[10]*z + m[14]*w,
+        w: m[3]*x + m[7]*y + m[11]*z + m[15]*w
+    };
+}
+function normalizeVector({ x, y, z, w }) {
+    const magnitude = Math.sqrt(x**2 + y**2 + z**2 + w**2)
+    return {
+        x: x / magnitude,
+        y: y / magnitude,
+        z: z / magnitude,
+        w: w / magnitude,
+    };
+}
+
 function fromPose(target, { x, y, z, w }, { x: qx, y: qy, z: qz, w: qw }) {
     target[0] = 1 - 2 * (qy**2 + qz**2);
     target[1] = 2 * (qx * qy + qz * qw);
@@ -361,15 +381,14 @@ class XRInputSourceEvent extends Event {
 }
 // hard-coded to the screen
 class XRInputSource {
-    #device;
-    constructor(device) {
-        this.#device = device;
+    #space;
+    constructor(matrix) {
+        this.#space = new XRSpace(matrix);
     }
     get handedness() { return 'none'; }
     get targetRayMode() { return 'screen'; }
     get targetRaySpace() {
-        // I think this points to the center of the screen?
-        return new XRSpace(IDENTITY_MATRIX);
+        return this.#space;
     }
     get gripSpace() { return null; }
     get profiles() { return ["generic-touchpad"]; }
@@ -429,6 +448,8 @@ class CanvasInputDevice {
     #sessions = new Set();
     #touchInputSources = new Map();
     #seenCanvases = new WeakSet();
+    #inverseProjectionMatrix = new Float32Array(16);
+
     constructor() {
         this.handleTouchStart = this.handleTouchStart.bind(this);
         this.handleTouchEnd = this.handleTouchEnd.bind(this);
@@ -442,6 +463,10 @@ class CanvasInputDevice {
         this.#sessions.delete(session);
     }
 
+    updateProjectionMatrix(matrix) {
+        invertInto(this.#inverseProjectionMatrix, matrix);
+    }
+
     listenOnCanvas(canvas) {
         if (!this.#seenCanvases.has(canvas)) {
             this.#seenCanvases.add(canvas);
@@ -453,7 +478,24 @@ class CanvasInputDevice {
     handleTouchStart(event) {
         const now = performance.now();
         for (const touch of event.changedTouches) {
-            const inputSource = new XRInputSource();
+            const { clientX, clientY, target: { clientWidth, clientHeight } } = touch;
+
+            const screenX = 2 * clientX / clientWidth - 1;
+            const screenY = 1 - 2 * clientY / clientHeight;
+
+            const worldPoint = transformVector({ x: screenX, y: screenY, z: 1, w: 1 }, this.#inverseProjectionMatrix);
+            const orientation = normalizeVector({
+                x: worldPoint.y,
+                y: -worldPoint.x,
+                z: 0,
+                w: Math.sqrt(worldPoint.x ** 2 + worldPoint.y ** 2 + worldPoint.z ** 2) - worldPoint.z
+            });
+
+
+            const matrix = new Float32Array(16);
+            fromPose(matrix, { x: 0, y: 0, z: 0, w: 1 }, orientation);
+
+            const inputSource = new XRInputSource(matrix);
             this.#touchInputSources.set(touch.identifier, inputSource);
             for (const session of this.#sessions) {
                 session._handleSelectStart(inputSource, now);
@@ -480,7 +522,7 @@ class XRDevice {
     #oldState;
     #oldWidth;
     #oldHeight;
-    #canvasInput = new CanvasInputDevice();
+    #canvasInput;
 
     constructor(viewSpaces, canvasInput) {
         this.#viewSpaces = viewSpaces;
@@ -556,6 +598,8 @@ class XRDevice {
         target[10] = -(depthFar + depthNear) / (depthFar - depthNear);
         target[11] = -1;
         target[14] = -2 * depthFar * depthNear / (depthFar - depthNear);
+
+        this.#canvasInput.updateProjectionMatrix(target);
     }
 
     draw() {
