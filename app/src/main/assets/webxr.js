@@ -357,13 +357,18 @@ class XRViewSpace extends XRSpace {
 }
 class XRReferenceSpace extends XRSpace {
     _type;
-    constructor(type, originOffset) {
+    #nativeOrigin;
+    constructor(type, nativeOrigin, originOffset) {
         super(originOffset);
         this._type = type;
+        this.#nativeOrigin = nativeOrigin;
     }
     getOffsetReferenceSpace(additionalOffset) {
         const newOffset = multiply(this._originOffset, additionalOffset.matrix);
-        return new XRReferenceSpace(this._type, newOffset);
+        return new XRReferenceSpace(this._type, this.#nativeOrigin, newOffset);
+    }
+    _getEffectiveOrigin() {
+        return multiply(this.#nativeOrigin, this._originOffset);
     }
 }
 
@@ -422,7 +427,7 @@ class XRFrame {
         if (!this.#animationFrame) {
             throw new Error('Cannot call getViewerPose on this frame');
         }
-        const invertedRefSpaceMatrix = invert(refSpace._originOffset);
+        const invertedRefSpaceMatrix = invert(refSpace._getEffectiveOrigin());
         if (refSpace._type === 'local-floor') {
             invertedRefSpaceMatrix[13] += this.#device.viewerHeight;
         }
@@ -436,7 +441,7 @@ class XRFrame {
         return new XRViewerPose(transform, views);
     }
     getPose(space, baseSpace) {
-        const invertedBaseSpaceMatrix = invert(baseSpace._originOffset);
+        const invertedBaseSpaceMatrix = invert(baseSpace._getEffectiveOrigin());
         if (baseSpace._type === 'local-floor') {
             invertedBaseSpaceMatrix[13] += this.#device.viewerHeight;
         }
@@ -730,7 +735,7 @@ class LeiaXRDevice extends XRDevice {
             this.#updateMatrix(type, matrix);
             this.#matrices.set(type, matrix);
         }
-        return new XRReferenceSpace(type, matrix);
+        return new XRReferenceSpace(type, matrix, IDENTITY_MATRIX);
     }
 
     refreshReferenceSpaces() {
@@ -923,7 +928,7 @@ class XRSession extends EventTarget {
             _compositionEnabled: true,
             _context: null,
         });
-        this.#viewerReferenceSpace = new XRReferenceSpace("viewer", IDENTITY_MATRIX);
+        this.#viewerReferenceSpace = new XRReferenceSpace("viewer", IDENTITY_MATRIX, IDENTITY_MATRIX);
         this.#windowRafHandle = window.requestAnimationFrame(timestamp => this.#onWindowAnimationFrame(timestamp));
         this.#inputSources = [];
     }
