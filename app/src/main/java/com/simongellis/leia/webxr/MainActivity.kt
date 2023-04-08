@@ -10,6 +10,7 @@ import android.util.Log
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.activity.OnBackPressedCallback
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -42,6 +43,16 @@ class MainActivity : AppCompatActivity() {
                 super.onPageStarted(view, url, favicon)
             }
         }
+
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (webView.canGoBack()) {
+                    webView.goBack()
+                } else {
+                    finish()
+                }
+            }
+        })
 
         val requestedUrl = getRequestedUrl(intent) ?: "https://immersive-web.github.io/webxr-samples/"
         _requestedUrl = requestedUrl
@@ -77,15 +88,6 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun requestBacklightMode2D() {
             displayManager.requestBacklightMode(LeiaDisplayManager.BacklightMode.MODE_2D)
-        }
-    }
-
-    override fun onBackPressed() {
-        val webView = findViewById<WebView>(R.id.webview)
-        if (webView.canGoBack()) {
-            webView.goBack()
-        } else {
-            super.onBackPressed()
         }
     }
 }
