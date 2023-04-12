@@ -14,8 +14,7 @@ import androidx.activity.OnBackPressedCallback
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
-import com.leia.android.lights.LeiaDisplayManager
-import com.leia.android.lights.LeiaSDK
+import com.leia.sdk.LeiaSDK
 
 class MainActivity : AppCompatActivity() {
     private var _requestedUrl: String? = null
@@ -24,14 +23,18 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+
         val windowInsetsController =
             WindowCompat.getInsetsController(window, window.decorView)
         windowInsetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         windowInsetsController.hide(WindowInsetsCompat.Type.systemBars())
 
-        val webView = findViewById<WebView>(R.id.webview)
+        val interlacer = findViewById<InterlacedWebViewHolder>(R.id.interlacer)
+        val webView = interlacer.webView
         webView.settings.javaScriptEnabled = true
-        webView.addJavascriptInterface(LeiaInterface(this), "Leia")
+
+        val leia = LeiaInterface(this, interlacer)
+        webView.addJavascriptInterface(leia, "Leia")
 
         val startup = assets.open("webxr.js").bufferedReader().use { it.readText() }
 
@@ -59,6 +62,16 @@ class MainActivity : AppCompatActivity() {
         webView.loadUrl(requestedUrl)
     }
 
+    override fun onPause() {
+        super.onPause()
+        findViewById<InterlacedWebViewHolder>(R.id.interlacer).onPause()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        findViewById<InterlacedWebViewHolder>(R.id.interlacer).onResume()
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         getRequestedUrl(intent)?.also {
@@ -77,17 +90,25 @@ class MainActivity : AppCompatActivity() {
         return null
     }
 
-    class LeiaInterface(context: Context) {
-        private val displayManager = LeiaSDK.getDisplayManager(context)!!
+    class LeiaInterface(context: Context, private val orchestrator: InterlacedWebViewHolder) {
+        private val sdk by lazy {
+            val initArgs = LeiaSDK.InitArgs()
+            initArgs.platform.context = context.applicationContext
+            initArgs.enableFaceTracking = true
+            initArgs.requiresFaceTrackingPermissionCheck = false
+            LeiaSDK.createSDK(initArgs)
+        }
 
         @JavascriptInterface
         fun requestBacklightMode3D() {
-            displayManager.requestBacklightMode(LeiaDisplayManager.BacklightMode.MODE_3D)
+            sdk.enableBacklight(true)
+            orchestrator.backlightEnabled = true
         }
 
         @JavascriptInterface
         fun requestBacklightMode2D() {
-            displayManager.requestBacklightMode(LeiaDisplayManager.BacklightMode.MODE_2D)
+            sdk.enableBacklight(false)
+            orchestrator.backlightEnabled = false
         }
     }
 }

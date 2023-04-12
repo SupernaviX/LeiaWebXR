@@ -676,11 +676,7 @@ varying vec2 v_TexCoord;
 uniform sampler2D u_Texture;
 
 void main() {
-    float eye = mod(gl_FragCoord.x - 0.5, 4.0) / 4.0;
-
-    float corrected_x = v_TexCoord.x / 4.0 + eye;
-
-    gl_FragColor = texture2D(u_Texture, vec2(corrected_x, v_TexCoord.y));
+    gl_FragColor = texture2D(u_Texture, v_TexCoord);
 }`;
 
 class LeiaXRDevice extends XRDevice {
@@ -703,10 +699,10 @@ class LeiaXRDevice extends XRDevice {
 
     constructor(canvasInput) {
         const viewSpaces = [
-            new XRViewSpace('left', translation(-0.01625, 0, 0)),
+            //new XRViewSpace('left', translation(-0.01625, 0, 0)),
             new XRViewSpace('left', translation(-0.008125, 0, 0)),
             new XRViewSpace('right', translation(0.008125, 0, 0)),
-            new XRViewSpace('right', translation(0.01625, 0, 0)),
+            //new XRViewSpace('right', translation(0.01625, 0, 0)),
         ];
         super(viewSpaces, canvasInput);
         this.#viewSpaces = viewSpaces;
@@ -785,7 +781,7 @@ class LeiaXRDevice extends XRDevice {
     }
 
     _computeViewports(width, height) {
-        const vpWidth = width / 4;
+        const vpWidth = width / 2;
         return this.#viewSpaces.map((viewSpace, i) => {
             const viewport = new XRViewport(vpWidth * i, 0, vpWidth, height);
             return { viewSpace, viewport };
