@@ -156,33 +156,35 @@ function translation(x, y, z) {
 }
 
 window.leiaManager = (function() {
-    const fullscreenBackdrop = document.createElement('div');
-    fullscreenBackdrop.style = 'background: white; position: fixed; top: 0; bottom: 0; left: 0; right: 0; z-index: 99999;'
-
     let active = false;
     let canvas = null;
 
+    let oldBody = null;
     let oldCanvasParent = null;
     let oldCanvasWidth = null;
     let oldCanvasHeight = null;
     let oldCanvasStyle = null;
-    function appendCanvasToBackdrop() {
+    function replaceBodyWithCanvas() {
         if (!canvas) return;
         oldCanvasParent = canvas.parentElement;
         oldCanvasStyle = canvas.style;
         oldCanvasWidth = canvas.width;
         oldCanvasHeight = canvas.height;
-        fullscreenBackdrop.appendChild(canvas);
+        oldBody = document.body;
+        document.documentElement.removeChild(oldBody);
+        document.documentElement.appendChild(canvas);
         canvas.style = 'width: 100%; height: 100%;'
         canvas.width = canvas.clientWidth * window.devicePixelRatio;
         canvas.height = canvas.clientHeight * window.devicePixelRatio;
     }
-    function removeCanvasFromBackdrop() {
+    function restoreBody() {
         if (!canvas) return;
+        document.documentElement.removeChild(canvas);
+        if (oldBody) {
+            document.documentElement.appendChild(oldBody);
+        }
         if (oldCanvasParent) {
             oldCanvasParent.appendChild(canvas);
-        } else {
-            fullscreenBackdrop.removeChild(canvas);
         }
         canvas.style = oldCanvasStyle;
         canvas.width = oldCanvasWidth;
@@ -204,21 +206,19 @@ window.leiaManager = (function() {
         }
         window.addEventListener('popstate', onFullscreenExited);
 
-        document.body.appendChild(fullscreenBackdrop);
-        appendCanvasToBackdrop();
+        replaceBodyWithCanvas();
     }
 
     function attachCanvas(_canvas) {
         if (canvas !== _canvas) {
             canvas = _canvas;
-            appendCanvasToBackdrop();
+            replaceBodyWithCanvas();
         }
     }
     function deactivate() {
         if (!active) return;
         active = false;
-        document.body.removeChild(fullscreenBackdrop)
-        removeCanvasFromBackdrop();
+        restoreBody();
     }
 
     return {

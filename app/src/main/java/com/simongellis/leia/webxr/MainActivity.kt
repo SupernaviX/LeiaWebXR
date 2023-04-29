@@ -3,6 +3,7 @@ package com.simongellis.leia.webxr
 import android.content.Context
 import android.content.Intent
 import android.content.Intent.ACTION_SEND
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
@@ -60,15 +61,35 @@ class MainActivity : AppCompatActivity() {
         val requestedUrl = getRequestedUrl(intent) ?: "https://immersive-web.github.io/webxr-samples/"
         _requestedUrl = requestedUrl
         webView.loadUrl(requestedUrl)
+
+        if (checkSelfPermission(android.Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+            leia.requestBacklightMode3D()
+            findViewById<PassthroughView>(R.id.passthrough).show()
+        } else {
+            requestPermissions(arrayOf(android.Manifest.permission.CAMERA), 42)
+        }
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 42 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            findViewById<PassthroughView>(R.id.passthrough).show()
+        }
     }
 
     override fun onPause() {
         super.onPause()
+        findViewById<PassthroughView>(R.id.passthrough).onPause()
         findViewById<InterlacedWebViewHolder>(R.id.interlacer).onPause()
     }
 
     override fun onResume() {
         super.onResume()
+        findViewById<PassthroughView>(R.id.passthrough).onResume()
         findViewById<InterlacedWebViewHolder>(R.id.interlacer).onResume()
     }
 
