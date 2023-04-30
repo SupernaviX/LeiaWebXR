@@ -170,8 +170,10 @@ window.leiaManager = (function() {
         oldCanvasStyle = canvas.style;
         oldCanvasWidth = canvas.width;
         oldCanvasHeight = canvas.height;
-        oldBody = document.body;
-        document.documentElement.removeChild(oldBody);
+        if (document.body) {
+            oldBody = document.body;
+            document.documentElement.removeChild(oldBody);
+        }
         document.documentElement.appendChild(canvas);
         canvas.style = 'width: 100%; height: 100%;'
         canvas.width = canvas.clientWidth * window.devicePixelRatio;

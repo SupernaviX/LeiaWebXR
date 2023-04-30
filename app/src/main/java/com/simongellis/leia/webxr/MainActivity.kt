@@ -19,6 +19,7 @@ import com.leia.sdk.LeiaSDK
 
 class MainActivity : AppCompatActivity() {
     private var _requestedUrl: String? = null
+    private lateinit var xrWebViewHolder: XRWebViewHolder
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -30,11 +31,11 @@ class MainActivity : AppCompatActivity() {
         windowInsetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         windowInsetsController.hide(WindowInsetsCompat.Type.systemBars())
 
-        val interlacer = findViewById<InterlacedWebViewHolder>(R.id.interlacer)
-        val webView = interlacer.webView
+        xrWebViewHolder = findViewById(R.id.xr_web_view_holder)
+        val webView = xrWebViewHolder.webView
         webView.settings.javaScriptEnabled = true
 
-        val leia = LeiaInterface(this, interlacer)
+        val leia = LeiaInterface(this, xrWebViewHolder)
         webView.addJavascriptInterface(leia, "Leia")
 
         val startup = assets.open("webxr.js").bufferedReader().use { it.readText() }
@@ -62,35 +63,19 @@ class MainActivity : AppCompatActivity() {
         _requestedUrl = requestedUrl
         webView.loadUrl(requestedUrl)
 
-        if (checkSelfPermission(android.Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
-            leia.requestBacklightMode3D()
-            findViewById<PassthroughView>(R.id.passthrough).show()
-        } else {
+        if (checkSelfPermission(android.Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(arrayOf(android.Manifest.permission.CAMERA), 42)
-        }
-    }
-
-    override fun onRequestPermissionsResult(
-        requestCode: Int,
-        permissions: Array<out String>,
-        grantResults: IntArray
-    ) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == 42 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-            findViewById<PassthroughView>(R.id.passthrough).show()
         }
     }
 
     override fun onPause() {
         super.onPause()
-        findViewById<PassthroughView>(R.id.passthrough).onPause()
-        findViewById<InterlacedWebViewHolder>(R.id.interlacer).onPause()
+        xrWebViewHolder.onPause()
     }
 
     override fun onResume() {
         super.onResume()
-        findViewById<PassthroughView>(R.id.passthrough).onResume()
-        findViewById<InterlacedWebViewHolder>(R.id.interlacer).onResume()
+        xrWebViewHolder.onResume()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -111,7 +96,7 @@ class MainActivity : AppCompatActivity() {
         return null
     }
 
-    class LeiaInterface(context: Context, private val orchestrator: InterlacedWebViewHolder) {
+    class LeiaInterface(context: Context, private val xrWebViewHolder: XRWebViewHolder) {
         private val sdk by lazy {
             val initArgs = LeiaSDK.InitArgs()
             initArgs.platform.context = context.applicationContext
@@ -123,13 +108,13 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun requestBacklightMode3D() {
             sdk.enableBacklight(true)
-            orchestrator.backlightEnabled = true
+            xrWebViewHolder.backlightEnabled = true
         }
 
         @JavascriptInterface
         fun requestBacklightMode2D() {
             sdk.enableBacklight(false)
-            orchestrator.backlightEnabled = false
+            xrWebViewHolder.backlightEnabled = false
         }
     }
 }

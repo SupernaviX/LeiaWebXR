@@ -4,15 +4,21 @@ import android.graphics.SurfaceTexture
 import android.opengl.GLES11Ext.GL_TEXTURE_EXTERNAL_OES
 import android.opengl.GLES20.*
 import android.opengl.Matrix
+import android.util.Log
 import android.util.Size
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.FloatBuffer
 import java.nio.ShortBuffer
 
-class PassthroughRenderer(private val leftSurfaceTexture: SurfaceTexture, private val rightSurfaceTexture: SurfaceTexture) {
+class PassthroughRenderer(
+    private val leftSurfaceTexture: SurfaceTexture,
+    private val rightSurfaceTexture: SurfaceTexture,
+    private val mainSurfaceTexture: SurfaceTexture,
+) {
     private var leftTextureId = -1
     private var rightTextureId = -1
+    private var mainTextureId = -1
 
     private var program = -1
     private var posLocation = -1
@@ -22,10 +28,12 @@ class PassthroughRenderer(private val leftSurfaceTexture: SurfaceTexture, privat
 
     private val leftTransform = FloatArray(16)
     private val rightTransform = FloatArray(16)
-    private val projection = FloatArray(16)
+    private val mainTransform = FloatArray(16)
+    private val scratch = FloatArray(16)
 
     private var leftStale = true
     private var rightStale = true
+    private var mainStale = true
 
     private var size = Size(640, 480)
 
@@ -39,6 +47,9 @@ class PassthroughRenderer(private val leftSurfaceTexture: SurfaceTexture, privat
         }
         rightSurfaceTexture.setOnFrameAvailableListener {
             rightStale = true
+        }
+        mainSurfaceTexture.setOnFrameAvailableListener {
+            mainStale = true
         }
 
         vertexBuffer = ByteBuffer.allocateDirect(SQUARE_POS_VERTICES.size * 4)
@@ -61,12 +72,14 @@ class PassthroughRenderer(private val leftSurfaceTexture: SurfaceTexture, privat
     }
 
     fun onSurfaceCreated() {
-        val textureIds = IntArray(2)
-        glGenTextures(2, textureIds, 0)
+        val textureIds = IntArray(3)
+        glGenTextures(3, textureIds, 0)
         leftTextureId = textureIds[0]
         leftSurfaceTexture.attachToGLContext(leftTextureId)
         rightTextureId = textureIds[1]
         rightSurfaceTexture.attachToGLContext(rightTextureId)
+        mainTextureId = textureIds[2]
+        mainSurfaceTexture.attachToGLContext(mainTextureId)
 
         program = glCreateProgram()
         val vertexShader = makeShader(GL_VERTEX_SHADER, VERTEX_SHADER)
@@ -83,18 +96,36 @@ class PassthroughRenderer(private val leftSurfaceTexture: SurfaceTexture, privat
     }
 
     fun onSurfaceChanged(width: Int, height: Int) {
-        Matrix.setIdentityM(projection, 0)
-        Matrix.scaleM(projection, 0, 0.5f, -1f, 1f)
-        Matrix.translateM(leftTransform, 0, projection, 0, -1f, 0f, 0f)
-        Matrix.translateM(rightTransform, 0, projection, 0, 1f, 0f, 0f)
+        Matrix.setIdentityM(scratch, 0)
+        Matrix.scaleM(mainTransform, 0, scratch, 0, 1f, -1f, 1f)
+        Matrix.scaleM(scratch, 0, 0.5f, -1f, 1f)
+        Matrix.translateM(leftTransform, 0, scratch, 0, -1f, 0f, 0f)
+        Matrix.translateM(rightTransform, 0, scratch, 0, 1f, 0f, 0f)
         size = Size(width, height)
+    }
+
+    private val TAG = "PassthroughRenderer"
+    private fun logError(message: String) {
+        var error = glGetError()
+        while (error != 0) {
+            Log.i(TAG, "${error.toString(16)}: $message")
+            if (error == GL_INVALID_FRAMEBUFFER_OPERATION) {
+                val status = glCheckFramebufferStatus(GL_FRAMEBUFFER)
+                Log.i(TAG, "\tstatus: ${status.toString(16)}")
+            }
+            error = glGetError()
+        }
     }
 
     fun onDrawFrame() {
         glViewport(0, 0, size.width, size.height)
+        logError("glViewport")
         glClearColor(1f, 0f, 0f, 1f)
+        logError("glClearColor")
         glClear(GL_COLOR_BUFFER_BIT)
+        logError("glClear")
         glUseProgram(program)
+        logError("glUseProgram")
         if (leftStale) {
             leftStale = false
             leftSurfaceTexture.updateTexImage()
@@ -105,6 +136,11 @@ class PassthroughRenderer(private val leftSurfaceTexture: SurfaceTexture, privat
             rightSurfaceTexture.updateTexImage()
         }
         drawSquare(rightTextureId, rightTransform)
+        if (mainStale) {
+            mainStale = false
+            mainSurfaceTexture.updateTexImage()
+        }
+        drawSquare(mainTextureId, mainTransform)
     }
 
     private fun makeShader(type: Int, source: String): Int {
@@ -116,15 +152,38 @@ class PassthroughRenderer(private val leftSurfaceTexture: SurfaceTexture, privat
 
     private fun drawSquare(textureId: Int, mv: FloatArray) {
         glActiveTexture(GL_TEXTURE0)
+        logError("glActiveTexture")
         glBindTexture(GL_TEXTURE_EXTERNAL_OES, textureId)
+        logError("glBindTexture")
         glUniform1i(texLocation, 0)
+        logError("bind tex location")
         glUniformMatrix4fv(mvLocation, 1, false, mv, 0)
+        logError("bind mv location")
 
-        glVertexAttribPointer(posLocation, VERTEX_SIZE, GL_FLOAT, false, VERTEX_STRIDE, vertexBuffer)
-        glVertexAttribPointer(texCoordLocation, VERTEX_SIZE, GL_FLOAT, false, VERTEX_STRIDE, textureBuffer)
+        glVertexAttribPointer(
+            posLocation,
+            VERTEX_SIZE,
+            GL_FLOAT,
+            false,
+            VERTEX_STRIDE,
+            vertexBuffer
+        )
+        logError("bind pos location")
+        glVertexAttribPointer(
+            texCoordLocation,
+            VERTEX_SIZE,
+            GL_FLOAT,
+            false,
+            VERTEX_STRIDE,
+            textureBuffer
+        )
+        logError("bind tex coord location")
         glEnableVertexAttribArray(posLocation)
+        logError("enable pos vertex attrib array")
         glEnableVertexAttribArray(texCoordLocation)
+        logError("enable tex coord vertex attrib array")
         glDrawElements(GL_TRIANGLES, SQUARE_INDICES.size, GL_UNSIGNED_SHORT, indexBuffer)
+        logError("draw shit")
     }
 
     companion object {
@@ -146,19 +205,15 @@ class PassthroughRenderer(private val leftSurfaceTexture: SurfaceTexture, privat
             uniform samplerExternalOES u_Texture;
             void main() {
                 gl_FragColor = texture2D(u_Texture, v_TexCoord);
-                //gl_FragColor = vec4(0.0, 0.0, 1.0, 1.0);
+                if (gl_FragColor.a < 0.1) {
+                    discard;
+                }
             }
         """
 
         const val VERTEX_SIZE = 2
         const val VERTEX_STRIDE = 0
-        /*
-        val SQUARE_POS_VERTICES = floatArrayOf(
-            -.5f, +.5f,
-            -.5f, -.5f,
-            +.5f, -.5f,
-            +.5f, +.5f
-        )*/
+
         val SQUARE_POS_VERTICES = floatArrayOf(
             -1f, +1f,
             -1f, -1f,

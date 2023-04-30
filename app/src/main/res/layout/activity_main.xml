@@ -6,8 +6,8 @@
     android:layout_height="match_parent"
     tools:context=".MainActivity">
 
-    <com.simongellis.leia.webxr.InterlacedWebViewHolder
-        android:id="@+id/interlacer"
+    <com.simongellis.leia.webxr.XRWebViewHolder
+        android:id="@+id/xr_web_view_holder"
         android:layout_width="match_parent"
         android:layout_height="match_parent"/>
 </androidx.constraintlayout.widget.ConstraintLayout>

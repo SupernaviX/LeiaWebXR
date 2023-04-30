@@ -13,6 +13,7 @@ import android.hardware.camera2.params.SessionConfiguration
 import android.opengl.GLES20.*
 import android.opengl.GLES30.*
 import android.util.AttributeSet
+import android.util.Log
 import android.util.Size
 import android.view.Surface
 import androidx.core.content.getSystemService
@@ -26,18 +27,20 @@ import javax.microedition.khronos.opengles.GL10
 class PassthroughView(context: Context, attrs: AttributeSet) : InterlacedSurfaceView(context, attrs) {
     private val cameraManager = context.getSystemService<CameraManager>()!!
     private val cameraExecutor = Executors.newSingleThreadExecutor()
+    private var cameraDevice: CameraDevice? = null
 
     private val asset = InputViewsAsset()
 
-    private var texture: SurfaceTexture? = null
-    private var surface: Surface? = null
+    private var fullTexture: SurfaceTexture? = null
 
     private val leftSurfaceTexture = SurfaceTexture(false)
     private var leftSize = Size(640, 480)
     private val rightSurfaceTexture = SurfaceTexture(false)
     private var rightSize = Size(640, 480)
+    private val mainSurfaceTexture = SurfaceTexture(false)
+    val mainSurface = Surface(mainSurfaceTexture)
 
-    private val passthrough = PassthroughRenderer(leftSurfaceTexture, rightSurfaceTexture)
+    private val passthrough = PassthroughRenderer(leftSurfaceTexture, rightSurfaceTexture, mainSurfaceTexture)
 
     init {
         addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
@@ -47,12 +50,22 @@ class PassthroughView(context: Context, attrs: AttributeSet) : InterlacedSurface
         setViewAsset(asset)
     }
 
+    private val TAG = "PassthroughView"
+    private fun logError(message: String) {
+        var error = glGetError()
+        while (error != 0) {
+            Log.i(TAG, "${error.toString(16)}: $message")
+            error = glGetError()
+        }
+    }
+
     override fun setRenderer(renderer: Renderer) {
         var drawFramebuffer = -1
         super.setRenderer(object : Renderer {
             override fun onSurfaceCreated(gl: GL10, config: EGLConfig) {
                 val framebufferIds = IntArray(1)
                 glGenFramebuffers(1, framebufferIds, 0)
+                logError("glGenFramebuffers")
                 drawFramebuffer = framebufferIds[0]
 
                 passthrough.onSurfaceCreated()
@@ -67,10 +80,14 @@ class PassthroughView(context: Context, attrs: AttributeSet) : InterlacedSurface
             override fun onDrawFrame(gl: GL10) {
                 if (asset.IsSurfaceValid()) {
                     glBindTexture(GL_TEXTURE_2D, asset.GetSurfaceId())
-                    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, null)
+                    logError("glBindTexture")
+                    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, null)
+                    logError("glTexImage2D")
 
                     glBindFramebuffer(GL_FRAMEBUFFER, drawFramebuffer)
+                    logError("glBindFramebuffer")
                     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, asset.GetSurfaceId(), 0)
+                    logError("glFramebufferTexture2D")
 
                     passthrough.onDrawFrame()
                 }
@@ -79,7 +96,7 @@ class PassthroughView(context: Context, attrs: AttributeSet) : InterlacedSurface
         })
     }
 
-    fun show() {
+    fun enableCamera() {
         leftSize = getSize(BACK_LEFT_PHYSICAL_CAMERA_ID)
         leftSurfaceTexture.setDefaultBufferSize(leftSize.width, leftSize.height)
         rightSize = getSize(BACK_RIGHT_PHYSICAL_CAMERA_ID)
@@ -88,12 +105,17 @@ class PassthroughView(context: Context, attrs: AttributeSet) : InterlacedSurface
         val leftSurface = Surface(leftSurfaceTexture)
         val rightSurface = Surface(rightSurfaceTexture)
         createCameraSession(leftSurface, rightSurface) {
+            cameraDevice = it.device
             val builder = it.device.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW)
             builder.addTarget(leftSurface)
             builder.addTarget(rightSurface)
             val request = builder.build()
             it.setSingleRepeatingRequest(request, cameraExecutor, object : CaptureCallback() {})
         }
+    }
+
+    fun disableCamera() {
+        cameraDevice?.close()
     }
 
     private fun getSize(cameraId: String): Size {
@@ -141,15 +163,15 @@ class PassthroughView(context: Context, attrs: AttributeSet) : InterlacedSurface
     }
 
     private fun resize(width: Int, height: Int) {
-        val surfaceTexture = texture
+        val surfaceTexture = fullTexture
         if (surfaceTexture == null || !asset.IsSurfaceValid()) {
             asset.CreateEmptySurfaceForPicture(width, height) {
-                texture = it
-                surface = Surface(it)
+                fullTexture = it
             }
         } else {
             surfaceTexture.setDefaultBufferSize(width, height)
         }
+        mainSurfaceTexture.setDefaultBufferSize(width, height)
     }
 
     companion object {
