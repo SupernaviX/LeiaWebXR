@@ -11,9 +11,7 @@ import android.webkit.WebView
 
 class SurfaceAwareWebView(context: Context, attrs: AttributeSet) : WebView(context, attrs) {
     var surface: Surface? = null
-    init {
-        setBackgroundColor(Color.TRANSPARENT)
-    }
+
     @SuppressLint("CanvasSize")
     override fun draw(canvas: Canvas) {
         val surface = surface

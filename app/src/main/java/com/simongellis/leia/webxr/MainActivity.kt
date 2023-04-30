@@ -106,15 +106,15 @@ class MainActivity : AppCompatActivity() {
         }
 
         @JavascriptInterface
-        fun requestBacklightMode3D() {
+        fun enableBacklight(passthrough: Boolean) {
             sdk.enableBacklight(true)
-            xrWebViewHolder.backlightEnabled = true
+            xrWebViewHolder.enableBacklight(passthrough)
         }
 
         @JavascriptInterface
-        fun requestBacklightMode2D() {
+        fun disableBacklight() {
             sdk.enableBacklight(false)
-            xrWebViewHolder.backlightEnabled = false
+            xrWebViewHolder.disableBacklight()
         }
     }
 }

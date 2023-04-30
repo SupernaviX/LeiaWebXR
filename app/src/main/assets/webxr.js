@@ -193,16 +193,16 @@ window.leiaManager = (function() {
         canvas.height = oldCanvasHeight;
     }
 
-    function activate(session) {
+    function activate(session, mode) {
         if (active) return;
         active = true;
 
-        Leia.requestBacklightMode3D();
+        Leia.enableBacklight(mode === 'immersive-ar');
         history.pushState({ leiaXrEnabled: true }, '');
         const onFullscreenExited = (event) => {
             event.preventDefault();
             window.removeEventListener('popstate', onFullscreenExited);
-            Leia.requestBacklightMode2D();
+            Leia.disableBacklight();
             navigator.xr._shutdownSession(session);
             deactivate();
         }
@@ -710,9 +710,9 @@ class LeiaXRDevice extends XRDevice {
         this.#viewSpaces = viewSpaces;
     }
 
-    onSessionStart(session) {
+    onSessionStart(session, mode) {
         super.onSessionStart(session);
-        leiaManager.activate(session);
+        leiaManager.activate(session, mode);
         this.#sensor.start();
     }
 
@@ -1109,7 +1109,7 @@ class XRSystem extends EventTarget {
                 inline._pause();
             }
         }
-        device.onSessionStart(session);
+        device.onSessionStart(session, mode);
         return session;
     }
     _shutdownSession(session) {
