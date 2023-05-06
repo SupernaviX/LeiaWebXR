@@ -102,6 +102,8 @@ class PassthroughView(context: Context, attrs: AttributeSet) : InterlacedSurface
         rightSize = getSize(BACK_RIGHT_PHYSICAL_CAMERA_ID)
         rightSurfaceTexture.setDefaultBufferSize(rightSize.width, rightSize.height)
 
+        printCameraInfo()
+
         val leftSurface = Surface(leftSurfaceTexture)
         val rightSurface = Surface(rightSurfaceTexture)
         createCameraSession(leftSurface, rightSurface) {
@@ -112,6 +114,26 @@ class PassthroughView(context: Context, attrs: AttributeSet) : InterlacedSurface
             val request = builder.build()
             it.setSingleRepeatingRequest(request, cameraExecutor, object : CaptureCallback() {})
         }
+    }
+
+    private fun printCameraInfo() {
+        cameraManager.cameraIdList.forEach {
+            Log.i(TAG, "Advertised camera id: $it")
+            printCameraInfo(it)
+        }
+        Log.i(TAG, "Logical camera id: $BACK_LOGICAL_CAMERA_ID")
+        printCameraInfo(BACK_LOGICAL_CAMERA_ID)
+        Log.i(TAG, "Left physical camera id: $BACK_LEFT_PHYSICAL_CAMERA_ID")
+        printCameraInfo(BACK_LEFT_PHYSICAL_CAMERA_ID)
+        Log.i(TAG, "Right physical camera id: $BACK_RIGHT_PHYSICAL_CAMERA_ID")
+        printCameraInfo(BACK_RIGHT_PHYSICAL_CAMERA_ID)
+    }
+
+    private fun printCameraInfo(cameraId: String) {
+        val chars = cameraManager.getCameraCharacteristics(cameraId)
+        val capabilities = chars.get(CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES) ?: intArrayOf()
+        Log.i(TAG, "$cameraId multicam: ${capabilities.contains(CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_LOGICAL_MULTI_CAMERA)}")
+        Log.i(TAG, "$cameraId physical cameras: ${chars.physicalCameraIds.joinToString(", ")}")
     }
 
     fun disableCamera() {
