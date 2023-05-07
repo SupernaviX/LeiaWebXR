@@ -12,94 +12,56 @@ import android.hardware.camera2.params.OutputConfiguration
 import android.hardware.camera2.params.SessionConfiguration
 import android.opengl.GLES20.*
 import android.opengl.GLES30.*
+import android.opengl.Matrix
 import android.util.AttributeSet
 import android.util.Log
 import android.util.Size
 import android.view.Surface
 import androidx.core.content.getSystemService
 import androidx.core.view.doOnLayout
-import com.leia.sdk.views.InputViewsAsset
-import com.leia.sdk.views.InterlacedSurfaceView
 import java.util.concurrent.Executors
-import javax.microedition.khronos.egl.EGLConfig
-import javax.microedition.khronos.opengles.GL10
 
-class PassthroughView(context: Context, attrs: AttributeSet) : InterlacedSurfaceView(context, attrs) {
+class PassthroughView(context: Context, attrs: AttributeSet) : LeiaSurfaceView(context, attrs) {
     private val cameraManager = context.getSystemService<CameraManager>()!!
     private val cameraExecutor = Executors.newSingleThreadExecutor()
     private var cameraDevice: CameraDevice? = null
 
-    private val asset = InputViewsAsset()
-
-    private var fullTexture: SurfaceTexture? = null
-
     private val leftSurfaceTexture = SurfaceTexture(false)
-    private var leftSize = Size(640, 480)
     private val rightSurfaceTexture = SurfaceTexture(false)
-    private var rightSize = Size(640, 480)
     private val mainSurfaceTexture = SurfaceTexture(false)
     val mainSurface = Surface(mainSurfaceTexture)
-
-    private val passthrough = PassthroughRenderer(leftSurfaceTexture, rightSurfaceTexture, mainSurfaceTexture)
 
     init {
         addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
             resize(v.width, v.height)
         }
         doOnLayout { resize(it.width, it.height) }
-        setViewAsset(asset)
+
+        val identity = FloatArray(16)
+        Matrix.setIdentityM(identity, 0)
+
+        // left camera takes up left half of the screen
+        val leftTransform = FloatArray(16)
+        Matrix.scaleM(leftTransform, 0, identity, 0, 0.5f, 1f, 1f)
+        Matrix.translateM(leftTransform, 0, -1f, 0f, 0f)
+        addTexture(leftSurfaceTexture, leftTransform)
+
+        // right camera takes up right half of the screen
+        val rightTransform = FloatArray(16)
+        Matrix.scaleM(rightTransform, 0, identity, 0, 0.5f, 1f, 1f)
+        Matrix.translateM(rightTransform, 0, 1f, 0f, 0f)
+        addTexture(rightSurfaceTexture, rightTransform)
+
+        // main surface goes on top of it all
+        addTexture(mainSurfaceTexture, identity)
     }
 
     private val TAG = "PassthroughView"
-    private fun logError(message: String) {
-        var error = glGetError()
-        while (error != 0) {
-            Log.i(TAG, "${error.toString(16)}: $message")
-            error = glGetError()
-        }
-    }
-
-    override fun setRenderer(renderer: Renderer) {
-        var drawFramebuffer = -1
-        super.setRenderer(object : Renderer {
-            override fun onSurfaceCreated(gl: GL10, config: EGLConfig) {
-                val framebufferIds = IntArray(1)
-                glGenFramebuffers(1, framebufferIds, 0)
-                logError("glGenFramebuffers")
-                drawFramebuffer = framebufferIds[0]
-
-                passthrough.onSurfaceCreated()
-                renderer.onSurfaceCreated(gl, config)
-            }
-
-            override fun onSurfaceChanged(gl: GL10, width: Int, height: Int) {
-                passthrough.onSurfaceChanged(width, height)
-                renderer.onSurfaceChanged(gl, width, height)
-            }
-
-            override fun onDrawFrame(gl: GL10) {
-                if (asset.IsSurfaceValid()) {
-                    glBindTexture(GL_TEXTURE_2D, asset.GetSurfaceId())
-                    logError("glBindTexture")
-                    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, null)
-                    logError("glTexImage2D")
-
-                    glBindFramebuffer(GL_FRAMEBUFFER, drawFramebuffer)
-                    logError("glBindFramebuffer")
-                    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, asset.GetSurfaceId(), 0)
-                    logError("glFramebufferTexture2D")
-
-                    passthrough.onDrawFrame()
-                }
-                renderer.onDrawFrame(gl)
-            }
-        })
-    }
 
     fun enableCamera() {
-        leftSize = getSize(BACK_LEFT_PHYSICAL_CAMERA_ID)
+        val leftSize = getSize(BACK_LEFT_PHYSICAL_CAMERA_ID)
         leftSurfaceTexture.setDefaultBufferSize(leftSize.width, leftSize.height)
-        rightSize = getSize(BACK_RIGHT_PHYSICAL_CAMERA_ID)
+        val rightSize = getSize(BACK_RIGHT_PHYSICAL_CAMERA_ID)
         rightSurfaceTexture.setDefaultBufferSize(rightSize.width, rightSize.height)
 
         printCameraInfo()
@@ -185,14 +147,6 @@ class PassthroughView(context: Context, attrs: AttributeSet) : InterlacedSurface
     }
 
     private fun resize(width: Int, height: Int) {
-        val surfaceTexture = fullTexture
-        if (surfaceTexture == null || !asset.IsSurfaceValid()) {
-            asset.CreateEmptySurfaceForPicture(width, height) {
-                fullTexture = it
-            }
-        } else {
-            surfaceTexture.setDefaultBufferSize(width, height)
-        }
         mainSurfaceTexture.setDefaultBufferSize(width, height)
     }
 

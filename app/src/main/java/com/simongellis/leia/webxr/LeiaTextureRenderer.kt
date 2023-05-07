@@ -3,7 +3,6 @@ package com.simongellis.leia.webxr
 import android.graphics.SurfaceTexture
 import android.opengl.GLES11Ext.GL_TEXTURE_EXTERNAL_OES
 import android.opengl.GLES20.*
-import android.opengl.Matrix
 import android.util.Log
 import android.util.Size
 import java.nio.ByteBuffer
@@ -23,11 +22,6 @@ class LeiaTextureRenderer {
     private var mvLocation = -1
     private var texLocation = -1
 
-    fun addTexture(texture: SurfaceTexture) {
-        val transform = FloatArray(16)
-        Matrix.setIdentityM(transform, 0)
-        addTexture(texture, transform)
-    }
     fun addTexture(texture: SurfaceTexture, transform: FloatArray) {
         textureHolders.add(TextureHolder(texture, transform))
     }
@@ -110,7 +104,7 @@ class LeiaTextureRenderer {
         logError("enable pos vertex attrib array")
         glEnableVertexAttribArray(texCoordLocation)
         logError("enable tex coord vertex attrib array")
-        glDrawElements(GL_TRIANGLES, PassthroughRenderer.SQUARE_INDICES.size, GL_UNSIGNED_SHORT, SQUARE_INDICES)
+        glDrawElements(GL_TRIANGLES, SQUARE_INDICES_SIZE, GL_UNSIGNED_SHORT, SQUARE_INDICES)
         logError("draw shit")
     }
 
@@ -154,7 +148,8 @@ class LeiaTextureRenderer {
             varying vec2 v_TexCoord;
             void main() {
                 gl_Position = u_MV * a_Pos;
-                v_TexCoord = a_TexCoord;
+                // leia renders upside down, so flip Y values
+                v_TexCoord = vec2(a_TexCoord.x, 1.0f - a_TexCoord.y);
             }
         """
 
@@ -187,6 +182,7 @@ class LeiaTextureRenderer {
             1f, 0f
         )
         val SQUARE_INDICES = shortBufferOf(0, 1, 2, 0, 2, 3)
+        val SQUARE_INDICES_SIZE = 6
 
         private fun floatBufferOf(vararg elements: Float): FloatBuffer {
             val buffer = ByteBuffer.allocateDirect(elements.size * 4)

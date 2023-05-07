@@ -11,7 +11,7 @@ import com.leia.sdk.views.InterlacedSurfaceView
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
 
-class LeiaSurfaceView(context: Context, attrs: AttributeSet) : InterlacedSurfaceView(context, attrs) {
+open class LeiaSurfaceView(context: Context, attrs: AttributeSet) : InterlacedSurfaceView(context, attrs) {
     private val asset = InputViewsAsset()
     private var backingTexture: SurfaceTexture? = null
     private var surface: Surface? = null
@@ -24,10 +24,6 @@ class LeiaSurfaceView(context: Context, attrs: AttributeSet) : InterlacedSurface
         }
         doOnLayout { resize(it.width, it.height) }
         setViewAsset(asset)
-    }
-
-    fun addTexture(texture: SurfaceTexture) {
-        textureRenderer.addTexture(texture)
     }
 
     fun addTexture(texture: SurfaceTexture, transform: FloatArray) {
