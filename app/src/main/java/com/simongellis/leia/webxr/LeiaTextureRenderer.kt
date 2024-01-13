@@ -10,7 +10,7 @@ import java.nio.ByteOrder
 import java.nio.FloatBuffer
 import java.nio.ShortBuffer
 
-class LeiaTextureRenderer {
+class LeiaTextureRenderer : Renderer {
     private val TAG = "LeiaTextureRenderer"
 
     private val textureHolders = mutableListOf<TextureHolder>()
@@ -26,7 +26,7 @@ class LeiaTextureRenderer {
         textureHolders.add(TextureHolder(texture, transform))
     }
 
-    fun onSurfaceCreated() {
+    override fun onSurfaceCreated() {
         val textureIds = IntArray(textureHolders.size)
         glGenTextures(textureIds.size, textureIds, 0)
         textureHolders.forEachIndexed { index, textureHolder ->
@@ -47,11 +47,11 @@ class LeiaTextureRenderer {
         texLocation = glGetUniformLocation(program, "u_Texture")
     }
 
-    fun onSurfaceChanged(width: Int, height: Int) {
+    override fun onSurfaceChanged(width: Int, height: Int) {
         size = Size(width, height)
     }
 
-    fun onDrawFrame() {
+    override fun onDrawFrame() {
         glViewport(0, 0, size.width, size.height)
         logError("glViewport")
         glUseProgram(program)
