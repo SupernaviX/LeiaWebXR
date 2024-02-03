@@ -1035,36 +1035,38 @@ class XRSession extends EventTarget {
     }
 
     #onWindowAnimationFrame(timestamp) {
-        if (this.#ended) {
-            return;
-        }
-        this.#windowRafHandle = window.requestAnimationFrame(timestamp => this.#onWindowAnimationFrame(timestamp))
-        if (this.#paused) {
-            return;
-        }
-        const frame = this.#animationFrame;
-        frame._setTimes(timestamp, timestamp);
-        if (this.#shouldRenderFrame()) {
-            this._device.updateDisplay(this.#activeRenderState);
-            this._device.refreshReferenceSpaces();
+        setTimeout(() => {
+            if (this.#ended) {
+                return;
+            }
+            this.#windowRafHandle = window.requestAnimationFrame(timestamp => this.#onWindowAnimationFrame(timestamp))
+            if (this.#paused) {
+                return;
+            }
+            const frame = this.#animationFrame;
+            frame._setTimes(timestamp, timestamp);
+            if (this.#shouldRenderFrame()) {
+                this._device.updateDisplay(this.#activeRenderState);
+                this._device.refreshReferenceSpaces();
 
-            this.#runningAnimationFrameCallbacks = this.#animationFrameCallbacks;
-            this.#animationFrameCallbacks = [];
-            this.#runningAnimationFrameCallbacks.forEach((callback) => {
-                if (callback.cancelled) { return; }
-                try {
-                    callback.callback(timestamp, frame);
-                } catch(err) {
-                    console.error(err);
-                    throw err;
-                }
-            });
-            this.#runningAnimationFrameCallbacks = [];
-            this._device.draw();
-        }
-        if (this.#pendingRenderState) {
-            this.#applyPendingRenderState();
-        }
+                this.#runningAnimationFrameCallbacks = this.#animationFrameCallbacks;
+                this.#animationFrameCallbacks = [];
+                this.#runningAnimationFrameCallbacks.forEach((callback) => {
+                    if (callback.cancelled) { return; }
+                    try {
+                        callback.callback(timestamp, frame);
+                    } catch(err) {
+                        console.error(err);
+                        throw err;
+                    }
+                });
+                this.#runningAnimationFrameCallbacks = [];
+                this._device.draw();
+            }
+            if (this.#pendingRenderState) {
+                this.#applyPendingRenderState();
+            }
+        }, 0);
     }
 
     #shouldRenderFrame() {
@@ -1124,3 +1126,10 @@ class XRSystem extends EventTarget {
     }
 }
 navigator.xr = new XRSystem();
+
+if ('WebGLRenderingContext' in window && !('makeXRCompatible' in WebGLRenderingContext.prototype)) {
+    WebGLRenderingContext.prototype.makeXRCompatible = () => Promise.resolve();
+}
+if ('WebGL2RenderingContext' in window && !('makeXRCompatible' in WebGL2RenderingContext.prototype)) {
+    WebGL2RenderingContext.prototype.makeXRCompatible = () => Promise.resolve();
+}
