@@ -1,15 +1,19 @@
 package com.simongellis.leia.webxr
 
+import android.app.AlertDialog
+import android.app.Dialog
 import android.content.Context
 import android.content.Intent
 import android.content.Intent.ACTION_SEND
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.net.Uri
+import android.net.http.SslError
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.util.Log
 import android.webkit.JavascriptInterface
+import android.webkit.SslErrorHandler
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebChromeClient.FileChooserParams
@@ -28,6 +32,12 @@ class MainActivity : AppCompatActivity() {
 
     private var _filePathCallback: ValueCallback<Array<Uri>>? = null
     private val _inputFileChooser = registerForActivityResult(FileChooserActivityContract, this::onFilesChosen)
+
+    private var _dialog: Dialog? = null
+        set(value) {
+            field = value
+            value?.setOnDismissListener { field = null }
+        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -54,6 +64,30 @@ class MainActivity : AppCompatActivity() {
                     Log.i("MainActivity", it)
                 }
                 super.onPageStarted(view, url, favicon)
+            }
+
+            override fun onReceivedSslError(
+                view: WebView,
+                handler: SslErrorHandler,
+                error: SslError
+            ) {
+                val cert = error.certificate
+                if (error.primaryError == SslError.SSL_UNTRUSTED && cert.issuedTo.dName == cert.issuedBy.dName) {
+                    _dialog = AlertDialog.Builder(this@MainActivity)
+                        .setTitle("Self-Signed SSL Cert")
+                        .setMessage("The URL ${error.url} has a self-signed SSL certificate. It may not be the website you expect.")
+                        .setPositiveButton("Open anyway") { _, _ -> handler.proceed() }
+                        .setNegativeButton("Do not open") { _, _ -> handler.cancel() }
+                        .create()
+                } else {
+                    _dialog = AlertDialog.Builder(this@MainActivity)
+                        .setTitle("Invalid SSL Cert")
+                        .setMessage("The URL ${error.url} has an invalid SSL certificate. This app will not load it.\n${error}")
+                        .setPositiveButton("OK") { _, _ -> }
+                        .create()
+                    handler.cancel()
+                }
+                _dialog?.show()
             }
         }
         webView.webChromeClient = object : WebChromeClient() {
