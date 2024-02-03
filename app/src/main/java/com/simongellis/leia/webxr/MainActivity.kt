@@ -5,13 +5,18 @@ import android.content.Intent
 import android.content.Intent.ACTION_SEND
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
+import android.net.Uri
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.util.Log
 import android.webkit.JavascriptInterface
+import android.webkit.ValueCallback
+import android.webkit.WebChromeClient
+import android.webkit.WebChromeClient.FileChooserParams
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.result.contract.ActivityResultContract
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -20,6 +25,9 @@ import com.leia.sdk.LeiaSDK
 class MainActivity : AppCompatActivity() {
     private var _requestedUrl: String? = null
     private lateinit var xrWebViewHolder: XRWebViewHolder
+
+    private var _filePathCallback: ValueCallback<Array<Uri>>? = null
+    private val _inputFileChooser = registerForActivityResult(FileChooserActivityContract, this::onFilesChosen)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -46,6 +54,16 @@ class MainActivity : AppCompatActivity() {
                     Log.i("MainActivity", it)
                 }
                 super.onPageStarted(view, url, favicon)
+            }
+        }
+        webView.webChromeClient = object : WebChromeClient() {
+            override fun onShowFileChooser(
+                webView: WebView,
+                filePathCallback: ValueCallback<Array<Uri>>,
+                fileChooserParams: FileChooserParams
+            ): Boolean {
+                chooseFiles(filePathCallback, fileChooserParams)
+                return true
             }
         }
 
@@ -94,6 +112,26 @@ class MainActivity : AppCompatActivity() {
             return intent.extras?.getString("android.intent.extra.TEXT")
         }
         return null
+    }
+
+    private fun chooseFiles(filePathCallback: ValueCallback<Array<Uri>>, fileChooserParams: FileChooserParams) {
+        _filePathCallback = filePathCallback
+        _inputFileChooser.launch(fileChooserParams)
+    }
+
+    private fun onFilesChosen(files: Array<Uri>) {
+        _filePathCallback?.onReceiveValue(files)
+        _filePathCallback = null
+    }
+
+    private object FileChooserActivityContract : ActivityResultContract<FileChooserParams, Array<Uri>>() {
+        override fun createIntent(context: Context, input: FileChooserParams): Intent {
+            return input.createIntent()
+        }
+
+        override fun parseResult(resultCode: Int, intent: Intent?): Array<Uri> {
+            return FileChooserParams.parseResult(resultCode, intent) ?: arrayOf()
+        }
     }
 
     class LeiaInterface(context: Context, private val xrWebViewHolder: XRWebViewHolder) {
