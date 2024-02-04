@@ -31,6 +31,13 @@ class XRWebViewHolder(context: Context, attrs: AttributeSet) : ConstraintLayout(
         surfaceView = view.findViewById(R.id.surfaceview)
         webView = view.findViewById(R.id.webview)
         disableBacklight()
+        if (context.resources.configuration.isNightModeActive) {
+            webView.setBackgroundColor(Color.BLACK)
+        }
+    }
+
+    fun onPageStarted() {
+        webView.setBackgroundColor(Color.WHITE)
     }
 
     fun onResume() {

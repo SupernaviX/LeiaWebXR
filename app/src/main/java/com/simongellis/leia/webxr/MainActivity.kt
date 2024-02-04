@@ -67,6 +67,7 @@ class MainActivity : AppCompatActivity() {
 
         webView.webViewClient = object : WebViewClient() {
             override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
+                xrWebViewHolder.onPageStarted()
                 view.evaluateJavascript(startup) {
                     Log.i("MainActivity", it)
                 }
