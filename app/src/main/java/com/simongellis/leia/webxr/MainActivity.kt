@@ -51,7 +51,14 @@ class MainActivity : AppCompatActivity() {
 
         xrWebViewHolder = findViewById(R.id.xr_web_view_holder)
         val webView = xrWebViewHolder.webView
-        webView.settings.javaScriptEnabled = true
+        webView.settings.apply {
+            javaScriptEnabled = true
+            allowFileAccess = true
+            allowContentAccess = true
+            databaseEnabled = true
+            domStorageEnabled = true
+            mediaPlaybackRequiresUserGesture = false
+        }
 
         val leia = LeiaInterface(this, xrWebViewHolder)
         webView.addJavascriptInterface(leia, "Leia")
